@@ -53,5 +53,5 @@ GUI 从 `font/` 目录加载字体（可执行文件同目录或上级）。主�
 
 - [x] 核心合成、PortAudio 播放
 - [x] 等时节拍、粉红噪声、Gnaural 解析
-- [ ] StubPredictor、参数控制层、无锁队列
+- [x] StubPredictor、参数控制层、无锁队列
 - [ ] 集成 ONNX/LibTorch，对接 CNN-LSTM 闭环

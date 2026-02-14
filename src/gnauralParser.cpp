@@ -73,41 +73,55 @@ bool parseXmlFormat(const std::string& content, Program& out) {
     std::vector<float> volL, volR;
     float noiseVol = 0.f;
 
-    std::regex entryRe("<entry[^>]*duration=\"([0-9]+)\"[^>]*beatfreq=\"([0-9.]+)\"[^>]*basefreq=\"([0-9.]+)\"[^>]*volume_left=\"([0-9.]+)\"[^>]*volume_right=\"([0-9.]+)\"[^>]*state=\"([0-9]+)\"");
-    std::regex entryRe2("<entry[^>]*beatfreq=\"([0-9.]+)\"[^>]*basefreq=\"([0-9.]+)\"[^>]*duration=\"([0-9]+)\"[^>]*");
+    std::regex entryRe("<entry[^>]*duration=\"([0-9.]+)\"[^>]*beatfreq=\"([0-9.]+)\"[^>]*basefreq=\"([0-9.]+)\"[^>]*volume_left=\"([0-9.]+)\"[^>]*volume_right=\"([0-9.]+)\"[^>]*state=\"([0-9]+)\"");
+    std::regex entryRe2("<entry[^>]*beatfreq=\"([0-9.]+)\"[^>]*basefreq=\"([0-9.]+)\"[^>]*duration=\"([0-9.]+)\"[^>]*");
+    std::regex entryRe3("<entry[^>]*parent=\"[^\"]*\"[^>]*duration=\"([0-9.]+)\"[^>]*volume_left=\"([0-9.]+)\"[^>]*volume_right=\"([0-9.]+)\"[^>]*beatfreq=\"([0-9.]+)\"[^>]*basefreq=\"([0-9.]+)\"[^>]*state=\"([0-9]+)\"");
     std::regex noiseRe("<noisevol[^>]*>([0-9.]+)</noisevol>");
 
-    std::smatch m;
-    std::string s = content;
-    while (std::regex_search(s, m, entryRe)) {
-        int dur = std::stoi(m[1].str());
-        float beat = std::stof(m[2].str());
-        float base = std::stof(m[3].str());
-        float vl = std::stof(m[4].str());
-        float vr = std::stof(m[5].str());
-        int state = std::stoi(m[6].str());
-        if (state != 0 && dur > 0) {
-            durations.push_back(dur);
+    auto addEntry = [&](float durSec, float beat, float base, float vl, float vr, int /*state*/) {
+        if (durSec > 0.0001f && (beat > 0.001f || base > 1.f)) {
+            int sec = static_cast<int>(durSec + 0.5f);
+            if (sec < 1) sec = 1;
+            durations.push_back(sec);
             beatFreqs.push_back(beat);
             baseFreqs.push_back(base);
             volL.push_back(vl);
             volR.push_back(vr);
         }
+    };
+
+    std::smatch m;
+    std::string s = content;
+    while (std::regex_search(s, m, entryRe)) {
+        float dur = std::stof(m[1].str());
+        float beat = std::stof(m[2].str());
+        float base = std::stof(m[3].str());
+        float vl = std::stof(m[4].str());
+        float vr = std::stof(m[5].str());
+        int state = std::stoi(m[6].str());
+        addEntry(dur, beat, base, vl, vr, state);
         s = m.suffix();
+    }
+    if (beatFreqs.empty()) {
+        s = content;
+        while (std::regex_search(s, m, entryRe3)) {
+            float dur = std::stof(m[1].str());
+            float vl = std::stof(m[2].str());
+            float vr = std::stof(m[3].str());
+            float beat = std::stof(m[4].str());
+            float base = std::stof(m[5].str());
+            int state = std::stoi(m[6].str());
+            addEntry(dur, beat, base, vl, vr, state);
+            s = m.suffix();
+        }
     }
     if (beatFreqs.empty()) {
         s = content;
         while (std::regex_search(s, m, entryRe2)) {
             float beat = std::stof(m[1].str());
             float base = std::stof(m[2].str());
-            int dur = std::stoi(m[3].str());
-            if (dur > 0) {
-                durations.push_back(dur);
-                beatFreqs.push_back(beat);
-                baseFreqs.push_back(base);
-                volL.push_back(0.85f);
-                volR.push_back(0.85f);
-            }
+            float dur = std::stof(m[3].str());
+            addEntry(dur, beat, base, 0.85f, 0.85f, 1);
             s = m.suffix();
         }
     }
@@ -125,15 +139,22 @@ bool parseXmlFormat(const std::string& content, Program& out) {
         Period p;
         p.lengthSec = durations[i];
         const float vol = (i < volL.size()) ? (volL[i] + volR[i]) * 0.5f : 0.85f;
+        const float beat = beatFreqs[i];
+        const bool isPinkNoiseOnly = (beat < 0.001f);
         p.voices.push_back({
-            .freqStart = beatFreqs[i],
-            .freqEnd = beatFreqs[i],
-            .volume = vol,
+            .freqStart = beat,
+            .freqEnd = beat,
+            .volume = isPinkNoiseOnly ? 0.f : vol,
             .pitch = (i < baseFreqs.size()) ? baseFreqs[i] : 200.f,
             .isochronic = false,
         });
-        p.background = (noiseVol > 0.001f) ? Period::Background::PinkNoise : Period::Background::None;
-        p.backgroundVol = noiseVol;
+        if (isPinkNoiseOnly) {
+            p.background = Period::Background::PinkNoise;
+            p.backgroundVol = vol;
+        } else {
+            p.background = (noiseVol > 0.001f) ? Period::Background::PinkNoise : Period::Background::None;
+            p.backgroundVol = noiseVol;
+        }
         out.seq.push_back(std::move(p));
     }
     return true;

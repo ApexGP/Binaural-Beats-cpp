@@ -200,6 +200,14 @@ float Synthesizer::voicetoPitch(int voiceIndex) const {
     }
 }
 
+const Period* Synthesizer::currentPeriod() const {
+    if (program_.seq.empty()) return nullptr;
+    if (currentPeriodIndex_ < 0 ||
+        static_cast<size_t>(currentPeriodIndex_) >= program_.seq.size())
+        return nullptr;
+    return &program_.seq[currentPeriodIndex_];
+}
+
 void Synthesizer::ensureStateSize() {
     if (program_.seq.empty()) return;
     const Period& period = program_.seq[currentPeriodIndex_];

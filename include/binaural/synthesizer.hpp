@@ -32,6 +32,9 @@ public:
     float periodElapsedSec() const { return periodElapsedSec_; }
     void advanceTime(float sec);
 
+    /// 当前 Period 指针，供参数控制层使用
+    const Period* currentPeriod() const;
+
 private:
     float voicetoPitch(int voiceIndex) const;
     void ensureStateSize();
