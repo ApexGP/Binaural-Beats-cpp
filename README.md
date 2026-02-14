@@ -1,4 +1,4 @@
-# 双耳节拍 (Binaural Beats) C++ 实现
+# 双耳节拍 (Binaural Beats)
 
 支持双耳节拍、等时节拍、粉红/白噪声、Gnaural 文件解析，预留 AI 闭环接口。
 
@@ -17,7 +17,9 @@ cmake .. -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release
 make -j4
 ```
 
-无 PortAudio 时，程序会生成 `output.wav`（10 秒）用于验证。无 imgui 时，GUI 目标不构建。
+- 缺少 `portaudio` 时，程序会生成 `output.wav`（10 秒）用于验证
+- 缺少 `imgui` 时，GUI 目标不构建
+- `vcpkg` 安装教程点击[这里](https://learn.microsoft.com/zh-cn/vcpkg/get_started/get-started?pivots=shell-bash)
 
 ## 运行
 
@@ -37,7 +39,7 @@ make -j4
 
 - 节拍频率 (0.5–40 Hz)、基频、平衡、音量
 - 五波段颜色标识（Delta/Theta/Alpha/Beta/Gamma）
-- 蓝色数值可点击直接输入
+- 频率调整可直接输入
 - 等时节拍 (Isochronic) 开关
 - 背景噪声：无 / 粉红 / 白噪声，可调音量
 - 实时波形显示

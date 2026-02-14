@@ -5,6 +5,7 @@
 #include "binaural/wavDriver.hpp"
 #include "binaural/waveformBuffer.hpp"
 #include "imgui.h"
+#include "imgui_internal.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
 #include <GLFW/glfw3.h>
@@ -82,6 +83,7 @@ void applyDarkTheme() {
   ImGui::GetStyle().FrameRounding = 12.f;
   ImGui::GetStyle().GrabRounding = 12.f;
   ImGui::GetStyle().WindowRounding = 0.f;
+  ImGui::GetStyle().PopupRounding = 12.f;
   ImGui::GetStyle().WindowBorderSize = 0.f;
   ImGui::GetStyle().ChildBorderSize = 0.f;
   ImGui::GetStyle().WindowPadding = ImVec2(16.f, 12.f);
@@ -348,10 +350,12 @@ int main() {
     ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 4);
     ImGui::Text("Binaural Beats");
     ImGui::SameLine(ImGui::GetWindowWidth() - 40);
-    if (ImGui::Selectable("\u22EE", false, 0, ImVec2(24, 24))) {
+    if (ImGui::Button("\u22EE", ImVec2(24, 24))) {
       ImGui::OpenPopup("MenuPopup");
     }
     if (ImGui::BeginPopup("MenuPopup")) {
+      if (ImGuiWindow *w = ImGui::GetCurrentWindow())
+        w->WindowRounding = 12.f;
       if (ImGui::MenuItem("Load Gnaural...")) {
         loadPathBuf[0] = '\0';
         showLoadModal = true;
@@ -527,6 +531,9 @@ int main() {
       ImGui::OpenPopup("Load Gnaural");
       showLoadModal = false;
     }
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 12.f);
+    ImGui::PushStyleVar(ImGuiStyleVar_PopupRounding, 12.f);
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 12.f);
     if (ImGui::BeginPopupModal("Load Gnaural", nullptr,
                                ImGuiWindowFlags_AlwaysAutoResize)) {
       ImGui::Text("File path (.txt or .gnaural):");
@@ -570,6 +577,7 @@ int main() {
       }
       ImGui::EndPopup();
     }
+    ImGui::PopStyleVar(3);
 
     ImGui::Render();
     int displayW, displayH;
