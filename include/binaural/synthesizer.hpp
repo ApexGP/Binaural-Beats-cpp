@@ -1,6 +1,7 @@
 #pragma once
 
 #include "period.hpp"
+#include "pinkNoise.hpp"
 #include <cstdint>
 #include <vector>
 
@@ -45,6 +46,8 @@ private:
     std::vector<float> phasesL_;
     std::vector<float> phasesR_;
     std::vector<float> phasesIso_;
+    PinkNoise pinkNoise_;
+    unsigned int whiteNoiseSeed_ = 1u;
 
     int currentPeriodIndex_ = 0;
     float periodElapsedSec_ = 0.f;

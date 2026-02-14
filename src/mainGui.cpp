@@ -1,4 +1,5 @@
 #include "binaural/audioDriver.hpp"
+#include "binaural/gnauralParser.hpp"
 #include "binaural/period.hpp"
 #include "binaural/synthesizer.hpp"
 #include "binaural/wavDriver.hpp"
@@ -14,14 +15,17 @@
 #include <vector>
 
 #ifdef _WIN32
+// clang-format off: windows.h must precede commdlg.h
 #include <windows.h>
+#include <commdlg.h>
+// clang-format on
 #endif
 
 using namespace binaural;
 
 namespace {
 constexpr int WIDTH = 800;
-constexpr int HEIGHT = 520;
+constexpr int HEIGHT = 600;
 constexpr float BEAT_MIN = 0.5f;
 constexpr float BEAT_MAX = 40.f;
 constexpr float BASE_FREQ_MIN = 40.f;
@@ -274,6 +278,8 @@ int main() {
   float balance = 0.f;
   float volume = 0.7f;
   bool playing = false;
+  bool showLoadModal = false;
+  char loadPathBuf[512] = "";
 
   auto driver = createPortAudioDriver();
   if (dynamic_cast<WavFileDriver *>(driver.get())) {
@@ -342,7 +348,17 @@ int main() {
     ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 4);
     ImGui::Text("Binaural Beats");
     ImGui::SameLine(ImGui::GetWindowWidth() - 40);
-    ImGui::TextDisabled("\u22EE"); // vertical ellipsis
+    if (ImGui::Selectable("\u22EE", false, 0, ImVec2(24, 24))) {
+      ImGui::OpenPopup("MenuPopup");
+    }
+    if (ImGui::BeginPopup("MenuPopup")) {
+      if (ImGui::MenuItem("Load Gnaural...")) {
+        loadPathBuf[0] = '\0';
+        showLoadModal = true;
+        ImGui::CloseCurrentPopup();
+      }
+      ImGui::EndPopup();
+    }
     ImGui::EndChild();
 
     ImGui::SetCursorPos(ImVec2(pad, pad + titleH));
@@ -396,8 +412,8 @@ int main() {
     if (bandAvail > 0) {
       ImGui::SetCursorPosX(28);
       const ImVec4 bandColors[] = {
-          ImVec4(0.9f, 0.25f, 0.2f, 1.f),   ImVec4(0.95f, 0.5f, 0.2f, 1.f),
-          ImVec4(0.95f, 0.85f, 0.2f, 1.f),  ImVec4(0.3f, 0.75f, 0.35f, 1.f),
+          ImVec4(0.9f, 0.25f, 0.2f, 1.f),  ImVec4(0.95f, 0.5f, 0.2f, 1.f),
+          ImVec4(0.95f, 0.85f, 0.2f, 1.f), ImVec4(0.3f, 0.75f, 0.35f, 1.f),
           ImVec4(0.6f, 0.35f, 0.85f, 1.f),
       };
       const float gap = 1.f;
@@ -434,6 +450,37 @@ int main() {
       synth.setBalance(balance);
     }
     ImGui::Spacing();
+
+    if (!program.seq.empty() && !program.seq[0].voices.empty()) {
+      bool iso = program.seq[0].voices[0].isochronic;
+      if (ImGui::Checkbox("Isochronic", &iso)) {
+        program.seq[0].voices[0].isochronic = iso;
+        synth.setProgram(program);
+      }
+      ImGui::SameLine(120);
+      int bg = static_cast<int>(program.seq[0].background);
+      const char *bgNames[] = {"No noise", "Pink noise", "White noise"};
+      if (ImGui::Combo("Background", &bg, bgNames, 3)) {
+        program.seq[0].background = static_cast<Period::Background>(bg);
+        synth.setProgram(program);
+      }
+      if (program.seq[0].background != Period::Background::None) {
+        ImGui::Spacing();
+        ImGui::AlignTextToFramePadding();
+        ImGui::Text("Noise");
+        ImGui::SameLine(70);
+        float noiseW = ImGui::GetContentRegionAvail().x - 20.f;
+        if (noiseW < 80.f)
+          noiseW = 80.f;
+        ImGui::PushID("NoiseVol");
+        ImGui::SetNextItemWidth(noiseW);
+        if (ImGui::SliderFloat("##noise", &program.seq[0].backgroundVol, 0.f,
+                               0.5f, "%.2f")) {
+          synth.setProgram(program);
+        }
+        ImGui::PopID();
+      }
+    }
     ImGui::Spacing();
 
     ImGui::AlignTextToFramePadding();
@@ -475,6 +522,54 @@ int main() {
 
     ImGui::EndChild();
     ImGui::End();
+
+    if (showLoadModal) {
+      ImGui::OpenPopup("Load Gnaural");
+      showLoadModal = false;
+    }
+    if (ImGui::BeginPopupModal("Load Gnaural", nullptr,
+                               ImGuiWindowFlags_AlwaysAutoResize)) {
+      ImGui::Text("File path (.txt or .gnaural):");
+      ImGui::SetNextItemWidth(400);
+      ImGui::InputText("##path", loadPathBuf, sizeof(loadPathBuf));
+#ifdef _WIN32
+      if (ImGui::Button("Browse...")) {
+        wchar_t pathW[512] = {};
+        OPENFILENAMEW ofn = {};
+        ofn.lStructSize = sizeof(ofn);
+        ofn.lpstrFilter =
+            L"Gnaural (*.txt;*.gnaural)\0*.txt;*.gnaural\0All (*.*)\0*.*\0";
+        ofn.lpstrFile = pathW;
+        ofn.nMaxFile = 512;
+        ofn.Flags = OFN_FILEMUSTEXIST;
+        if (GetOpenFileNameW(&ofn)) {
+          char pathA[512];
+          WideCharToMultiByte(CP_UTF8, 0, pathW, -1, pathA, 512, 0, 0);
+          strncpy(loadPathBuf, pathA, sizeof(loadPathBuf) - 1);
+          loadPathBuf[sizeof(loadPathBuf) - 1] = '\0';
+        }
+      }
+      ImGui::SameLine();
+#endif
+      if (ImGui::Button("Load")) {
+        if (auto prog = parseGnaural(loadPathBuf)) {
+          program = std::move(*prog);
+          synth.setProgram(program);
+          if (!program.seq.empty() && !program.seq[0].voices.empty()) {
+            beatFreq = program.seq[0].voices[0].freqStart;
+            baseFreq = program.seq[0].voices[0].pitch > 0
+                           ? program.seq[0].voices[0].pitch
+                           : 161.f;
+          }
+          ImGui::CloseCurrentPopup();
+        }
+      }
+      ImGui::SameLine();
+      if (ImGui::Button("Cancel")) {
+        ImGui::CloseCurrentPopup();
+      }
+      ImGui::EndPopup();
+    }
 
     ImGui::Render();
     int displayW, displayH;

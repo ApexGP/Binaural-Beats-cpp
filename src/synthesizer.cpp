@@ -6,6 +6,10 @@ namespace binaural {
 
 namespace {
 constexpr float A_FREQ = 432.0f;
+float whiteNoise(unsigned int& seed) {
+    seed = seed * 1103515245u + 12345u;
+    return ((seed >> 16) / 32768.0f) - 1.0f;
+}
 constexpr float TWO_PI = 6.283185307f;
 constexpr float FADE_INOUT_PERIOD = 5.0f;
 constexpr float FADE_MIN = 0.6f;
@@ -107,10 +111,12 @@ void Synthesizer::fillSamples(std::vector<int16_t>& outSamples) {
 
         if (isochronic_[j]) {
             for (int i = 0; i < numFrames * 2; i += 2) {
+                float gain = 0.f;
                 if (phaseIso < 0.5f) {
-                    ws[i] += std::sin(TWO_PI * phaseL) * vol;
-                    ws[i + 1] += std::sin(TWO_PI * phaseR) * vol;
+                    gain = std::cos(phaseIso * 3.14159265f);
                 }
+                ws[i] += std::sin(TWO_PI * phaseL) * vol * gain;
+                ws[i + 1] += std::sin(TWO_PI * phaseR) * vol * gain;
                 phaseL += incL;
                 phaseR += incR;
                 if (phaseL >= 1.0f) phaseL -= 1.0f;
@@ -136,9 +142,24 @@ void Synthesizer::fillSamples(std::vector<int16_t>& outSamples) {
 
     const float multL = 1.0f - std::max(0.0f, balance_);
     const float multR = 1.0f - std::max(0.0f, -balance_);
+    const float bgVol = period.backgroundVol * fade * volumeMultiplier_ * 0.5f;
+    const bool usePink = (period.background == Period::Background::PinkNoise);
+    const bool useWhite = (period.background == Period::Background::WhiteNoise);
+
     for (int i = 0; i < numFrames * 2; i += 2) {
         float valL = ws[i] * 32767.0f / numVoices * multL;
         float valR = ws[i + 1] * 32767.0f / numVoices * multR;
+        if (bgVol > 0.f) {
+            if (usePink) {
+                const float p = pinkNoise_.tick();
+                valL += p * bgVol * 32767.0f * multL;
+                valR += p * bgVol * 32767.0f * multR;
+            } else if (useWhite) {
+                const float w = whiteNoise(whiteNoiseSeed_);
+                valL += w * bgVol * 32767.0f * multL;
+                valR += w * bgVol * 32767.0f * multR;
+            }
+        }
         outSamples[i] = static_cast<int16_t>(
             std::clamp(valL, -32768.0f, 32767.0f));
         outSamples[i + 1] = static_cast<int16_t>(

@@ -1,60 +1,55 @@
 # 双耳节拍 (Binaural Beats) C++ 实现
 
-基于 `guideline.md` 与 `algorithm_spec.md` 的 C++ 实现，预留 AI 闭环接口。
+支持双耳节拍、等时节拍、粉红/白噪声、Gnaural 文件解析，预留 AI 闭环接口。
 
 ## 构建
 
+### 依赖（vcpkg + MinGW toolchain）
+
 ```powershell
+# 安装 PortAudio + ImGui
+vcpkg install portaudio:x64-mingw-static imgui[glfw-binding,opengl3-binding]:x64-mingw-static
+
+# 编译（需配置VCPKG_ROOT）
 mkdir build
-cd build
-cmake .. -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release
-mingw32-make
-```
-
-### 可选：PortAudio + GUI（vcpkg + MinGW 静态）
-
-```powershell
-# 安装依赖（x64-mingw-static）
-vcpkg install portaudio:x64-mingw-static raylib:x64-mingw-static
-
-# 验证
-vcpkg list portaudio raylib
-
-# 配置（VCPKG_ROOT 已设时自动使用 vcpkg toolchain）
 cd build
 cmake .. -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release
 make -j4
 ```
 
-`compile_commands.json` 会生成在 build 目录，供 clangd 等使用。
-
-无 PortAudio 时，程序会生成 `output.wav`（10 秒）用于验证。
+无 PortAudio 时，程序会生成 `output.wav`（10 秒）用于验证。无 imgui 时，GUI 目标不构建。
 
 ## 运行
 
-**控制台版**（无 UI）：
+**CLI**：
+
 ```powershell
-.\BinauralBeats.exe
+.\build\BinauralBeats.exe
 ```
 
-**GUI 版**（需 raylib）：
+**GUI**（需 PortAudio + imgui）：
+
 ```powershell
-.\BinauralBeatsGui.exe
+.\build\BinauralBeatsGui.exe
 ```
-- 节拍频率滑块 (3–30 Hz)
-- 音量滑块
-- Play/Stop 按钮
+
+### GUI 功能
+
+- 节拍频率 (0.5–40 Hz)、基频、平衡、音量
+- 五波段颜色标识（Delta/Theta/Alpha/Beta/Gamma）
+- 蓝色数值可点击直接输入
+- 等时节拍 (Isochronic) 开关
+- 背景噪声：无 / 粉红 / 白噪声，可调音量
 - 实时波形显示
+- 加载 Gnaural 文件（菜单 ⋮ → Load Gnaural...）：支持 `.txt` 旧格式与 `.gnaural` XML
 
-## 目录结构
+### 字体
 
-```
-include/binaural/   # 头文件
-src/             # 实现
-  sinTable.cpp
-  synthesizer.cpp
-  audioDriverPortaudio.cpp  # PortAudio 驱动
-  audioDriverStub.cpp      # WAV 回退
-  wavDriver.cpp
-  main.cpp
-```
+GUI 从 `font/` 目录加载字体（可执行文件同目录或上级）。主字体 Noto Sans，其余 `.ttf`/`.otf` 作为 fallback。若不存在则使用系统默认字体。
+
+## TODO
+
+- [x] 核心合成、PortAudio 播放
+- [x] 等时节拍、粉红噪声、Gnaural 解析
+- [ ] StubPredictor、参数控制层、无锁队列
+- [ ] 集成 ONNX/LibTorch，对接 CNN-LSTM 闭环
