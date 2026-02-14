@@ -11,6 +11,8 @@ public:
 
     float sinFastInt(int angle) const;
     float cosFastInt(int angle) const;
+    /// phase in [0, 1) -> sin(2*pi*phase), 线性插值保证亚 Hz 精度
+    float sinFastFloat(float phase) const;
 
     int size() const { return static_cast<int>(tableSin_.size()); }
 

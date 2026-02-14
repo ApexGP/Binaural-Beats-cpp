@@ -29,4 +29,13 @@ float SinTable::cosFastInt(int angle) const {
     return tableCos_[idx];
 }
 
+float SinTable::sinFastFloat(float phase) const {
+    phase -= std::floor(phase);
+    const float scaled = phase * static_cast<float>(size_);
+    const int i0 = static_cast<int>(scaled) % size_;
+    const int i1 = (i0 + 1) % size_;
+    const float frac = scaled - std::floor(scaled);
+    return tableSin_[i0] * (1.f - frac) + tableSin_[i1] * frac;
+}
+
 }  // namespace binaural

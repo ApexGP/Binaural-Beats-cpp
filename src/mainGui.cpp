@@ -84,16 +84,33 @@ void applyDarkTheme() {
 }
 
 bool sliderWithButtons(const char *label, float *v, float minV, float maxV,
-                       const char *fmt, float step, const char *valueLabel) {
+                       const char *fmt, float step, const char *valueLabel,
+                       const char *inputFmt = nullptr,
+                       const char *unitSuffix = nullptr) {
   bool changed = false;
   ImGui::PushID(label);
   ImGui::BeginGroup();
   ImGui::AlignTextToFramePadding();
   ImGui::Text("%s", label);
   float regionX = ImGui::GetContentRegionAvail().x;
-  ImGui::SameLine(regionX - 65); // 值靠右，预留 65px
+  ImGui::SameLine(regionX - 78);
   ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.4f, 0.6f, 1.0f, 1.0f));
-  ImGui::Text("%s", valueLabel);
+  if (inputFmt && inputFmt[0]) {
+    ImGui::SetNextItemWidth(58);
+    float tmp = *v;
+    if (ImGui::InputFloat("##val", &tmp, 0, 0, inputFmt,
+                          ImGuiInputTextFlags_EnterReturnsTrue |
+                              ImGuiInputTextFlags_CharsDecimal)) {
+      *v = (std::max)(minV, (std::min)(maxV, tmp));
+      changed = true;
+    }
+    if (unitSuffix && unitSuffix[0]) {
+      ImGui::SameLine(0, 2);
+      ImGui::Text("%s", unitSuffix);
+    }
+  } else {
+    ImGui::Text("%s", valueLabel);
+  }
   ImGui::PopStyleColor();
   ImGui::Spacing();
   const float btnReserve = 72.f;
@@ -366,7 +383,7 @@ int main() {
     char buf[32];
     snprintf(buf, sizeof(buf), "%.1f Hz", beatFreq);
     if (sliderWithButtons("Binaural Beat", &beatFreq, BEAT_MIN, BEAT_MAX,
-                          "%.1f Hz", 0.5f, buf)) {
+                          "%.1f Hz", 0.5f, buf, "%.1f", "Hz")) {
       if (!program.seq.empty() && !program.seq[0].voices.empty()) {
         program.seq[0].voices[0].freqStart = beatFreq;
         program.seq[0].voices[0].freqEnd = beatFreq;
@@ -404,7 +421,7 @@ int main() {
 
     snprintf(buf, sizeof(buf), "%.0f Hz", baseFreq);
     if (sliderWithButtons("Base Frequency", &baseFreq, BASE_FREQ_MIN,
-                          BASE_FREQ_MAX, "%.0f Hz", 5.f, buf)) {
+                          BASE_FREQ_MAX, "%.0f Hz", 5.f, buf, "%.0f", "Hz")) {
       if (!program.seq.empty() && !program.seq[0].voices.empty()) {
         program.seq[0].voices[0].pitch = baseFreq;
         synth.setProgram(program);
@@ -413,7 +430,7 @@ int main() {
     ImGui::Spacing();
 
     if (sliderWithButtons("Balance", &balance, BALANCE_MIN, BALANCE_MAX, "%.2f",
-                          0.1f, getBalanceLabel(balance))) {
+                          0.1f, getBalanceLabel(balance), "%.2f", "")) {
       synth.setBalance(balance);
     }
     ImGui::Spacing();

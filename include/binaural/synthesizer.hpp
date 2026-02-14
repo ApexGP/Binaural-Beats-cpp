@@ -1,7 +1,6 @@
 #pragma once
 
 #include "period.hpp"
-#include "sinTable.hpp"
 #include <cstdint>
 #include <vector>
 
@@ -38,15 +37,14 @@ private:
 
     SynthesizerConfig config_;
     Program program_;
-    SinTable sinTable_;
 
     std::vector<float> freqs_;
     std::vector<float> vols_;
     std::vector<float> pitchs_;
     std::vector<bool> isochronic_;
-    std::vector<int> anglesL_;
-    std::vector<int> anglesR_;
-    std::vector<int> anglesIso_;
+    std::vector<float> phasesL_;
+    std::vector<float> phasesR_;
+    std::vector<float> phasesIso_;
 
     int currentPeriodIndex_ = 0;
     float periodElapsedSec_ = 0.f;

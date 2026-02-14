@@ -6,6 +6,7 @@ namespace binaural {
 
 namespace {
 constexpr float A_FREQ = 432.0f;
+constexpr float TWO_PI = 6.283185307f;
 constexpr float FADE_INOUT_PERIOD = 5.0f;
 constexpr float FADE_MIN = 0.6f;
 
@@ -16,8 +17,7 @@ float getPitchFreq(int noteK, int octave) {
 }
 }  // namespace
 
-Synthesizer::Synthesizer(const SynthesizerConfig& config)
-    : config_(config), sinTable_(config.iscale) {}
+Synthesizer::Synthesizer(const SynthesizerConfig& config) : config_(config) {}
 
 void Synthesizer::setProgram(const Program& program) {
     program_ = program;
@@ -74,7 +74,6 @@ void Synthesizer::fillSamples(std::vector<int16_t>& outSamples) {
     ensureStateSize();
 
     const int numFrames = config_.bufferFrames;
-    const int iscale = config_.iscale;
     const float sampleRate = static_cast<float>(config_.sampleRate);
     const int numVoices = static_cast<int>(period.voices.size());
 
@@ -92,48 +91,47 @@ void Synthesizer::fillSamples(std::vector<int16_t>& outSamples) {
 
     std::vector<float> ws(numFrames * 2, 0.f);
 
+    const float phaseStepScale = 1.0f / sampleRate;
     for (int j = 0; j < numVoices; ++j) {
         const float baseFreq = pitchs_[j];
         const float beatFreq = freqs_[j];
         const float vol = vols_[j] * fade * volumeMultiplier_;
 
-        const int inc1 = static_cast<int>(
-            std::round(iscale * (baseFreq + beatFreq) / sampleRate));
-        const int inc2 =
-            static_cast<int>(std::round(iscale * baseFreq / sampleRate));
-        const int incIso =
-            static_cast<int>(std::round(iscale * beatFreq / sampleRate));
+        const float incL = (baseFreq + beatFreq) * phaseStepScale;
+        const float incR = baseFreq * phaseStepScale;
+        const float incIso = beatFreq * phaseStepScale;
 
-        int angle1 = anglesL_[j];
-        int angle2 = anglesR_[j];
-        int angleIso = anglesIso_[j];
+        float phaseL = phasesL_[j];
+        float phaseR = phasesR_[j];
+        float phaseIso = phasesIso_[j];
 
         if (isochronic_[j]) {
             for (int i = 0; i < numFrames * 2; i += 2) {
-                if (angleIso < iscale / 2) {
-                    ws[i] += sinTable_.sinFastInt(angle1) * vol;
-                    ws[i + 1] += sinTable_.sinFastInt(angle2) * vol;
+                if (phaseIso < 0.5f) {
+                    ws[i] += std::sin(TWO_PI * phaseL) * vol;
+                    ws[i + 1] += std::sin(TWO_PI * phaseR) * vol;
                 }
-                angle1 += inc1;
-                angle2 += inc2;
-                angleIso += incIso;
-                if (angleIso >= iscale) angleIso -= iscale;
-                if (angleIso < 0) angleIso += iscale;
+                phaseL += incL;
+                phaseR += incR;
+                if (phaseL >= 1.0f) phaseL -= 1.0f;
+                if (phaseR >= 1.0f) phaseR -= 1.0f;
+                phaseIso += incIso;
+                if (phaseIso >= 1.0f) phaseIso -= 1.0f;
+                if (phaseIso < 0.0f) phaseIso += 1.0f;
             }
         } else {
             for (int i = 0; i < numFrames * 2; i += 2) {
-                ws[i] += sinTable_.sinFastInt(angle1) * vol;
-                ws[i + 1] += sinTable_.sinFastInt(angle2) * vol;
-                angle1 += inc1;
-                angle2 += inc2;
+                ws[i] += std::sin(TWO_PI * phaseL) * vol;
+                ws[i + 1] += std::sin(TWO_PI * phaseR) * vol;
+                phaseL += incL;
+                phaseR += incR;
+                if (phaseL >= 1.0f) phaseL -= 1.0f;
+                if (phaseR >= 1.0f) phaseR -= 1.0f;
             }
         }
-
-        anglesL_[j] = angle1 % iscale;
-        if (anglesL_[j] < 0) anglesL_[j] += iscale;
-        anglesR_[j] = angle2 % iscale;
-        if (anglesR_[j] < 0) anglesR_[j] += iscale;
-        anglesIso_[j] = angleIso;
+        phasesL_[j] = phaseL;
+        phasesR_[j] = phaseR;
+        phasesIso_[j] = phaseIso;
     }
 
     const float multL = 1.0f - std::max(0.0f, balance_);
@@ -212,10 +210,10 @@ void Synthesizer::ensureStateSize() {
             isochronic_[j] = period.voices[j].isochronic;
         }
     }
-    if (anglesL_.size() != n) {
-        anglesL_.resize(n, 0);
-        anglesR_.resize(n, 0);
-        anglesIso_.resize(n, 0);
+    if (phasesL_.size() != n) {
+        phasesL_.resize(n, 0.f);
+        phasesR_.resize(n, 0.f);
+        phasesIso_.resize(n, 0.f);
     }
 }
 

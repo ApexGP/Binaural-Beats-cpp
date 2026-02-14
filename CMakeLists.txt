@@ -15,7 +15,6 @@ project(BinauralBeats LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 
 add_library(BinauralSrc
-    src/sinTable.cpp
     src/synthesizer.cpp
 )
 target_include_directories(BinauralSrc PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
