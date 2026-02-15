@@ -11,6 +11,7 @@
 #include "imgui_impl_opengl3.h"
 #include "imgui_internal.h"
 #include <GLFW/glfw3.h>
+#include <algorithm>
 #include <cstdio>
 #include <filesystem>
 #include <memory>
@@ -27,8 +28,8 @@
 using namespace binaural;
 
 namespace {
-constexpr int WIDTH = 800;
-constexpr int HEIGHT = 600;
+constexpr int WIDTH = 960;
+constexpr int HEIGHT = 720;
 constexpr float BEAT_MIN = 0.5f;
 constexpr float BEAT_MAX = 40.f;
 constexpr float BASE_FREQ_MIN = 40.f;
@@ -177,7 +178,7 @@ void loadFontsFromDir() {
     io.Fonts->AddFontDefault();
     return;
   }
-  const float fontSize = 16.0f;
+  const float fontSize = 20.0f;
   static const ImWchar *iconRanges = nullptr;
   static ImVector<ImWchar> iconRangesBuf;
   {
@@ -186,6 +187,7 @@ void loadFontsFromDir() {
     b.AddChar(0x23F1);
     b.AddChar(0x22EE);
     b.AddChar(0x25B6);
+    b.AddChar(0x221E); // ∞ infinity
     b.AddChar(0xEB7C);
     b.AddChar(0xEB10);
     b.AddChar(0xEB2C);
@@ -194,9 +196,9 @@ void loadFontsFromDir() {
   }
   const char *defaultOrder[] = {
       "NotoSans-SemiBold.ttf",
-      "NotoSansSymbols-VariableFont_wght.ttf",
       "NotoSansSymbols-SemiBold.ttf",
-      "NotoSansSymbols2-Regular.ttf",
+      "NotoSansSymbols-VariableFont_wght.ttf",
+      "JetBrainsMonoNerdFontMono-Regular.ttf",
   };
   ImFont *baseFont = nullptr;
   for (const char *name : defaultOrder) {
@@ -253,12 +255,12 @@ void loadFontsFromDir() {
 
 int main() {
   Program program;
-  program.name = "Alpha Relax";
+  program.name = "Theta meditation";
   program.seq.push_back({
       .lengthSec = 3600,
       .voices = {{
-          .freqStart = 10.0f,
-          .freqEnd = 10.0f,
+          .freqStart = 4.0f,
+          .freqEnd = 4.0f,
           .volume = 0.7f,
           .pitch = 161.f,
           .isochronic = false,
@@ -280,13 +282,15 @@ int main() {
 
   WaveformBuffer waveBuf(2048);
 
-  float beatFreq = 10.f;
+  float beatFreq = 4.f;
   float baseFreq = 161.f;
   float balance = 0.f;
   float volume = 0.7f;
   bool playing = false;
   bool showLoadModal = false;
   char loadPathBuf[512] = "";
+  bool loadedFromGnaural = false;
+  float manualElapsedSec = 0.f;
 
   auto driver = createPortAudioDriver();
   if (dynamic_cast<WavFileDriver *>(driver.get())) {
@@ -354,24 +358,90 @@ int main() {
     ImGui::SameLine(ImGui::GetWindowWidth() / 2.f - 60);
     ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 4);
     ImGui::Text("Binaural Beats");
-    ImGui::SameLine(ImGui::GetWindowWidth() - 40);
-    if (ImGui::Button("\u22EE", ImVec2(24, 24))) {
+    char eBuf[16], tBuf[16];
+    if (loadedFromGnaural && !program.seq.empty()) {
+      int idx = synth.currentPeriodIndex();
+      if (idx >= static_cast<int>(program.seq.size()))
+        idx = 0;
+      snprintf(eBuf, sizeof(eBuf), "%d",
+               static_cast<int>(synth.periodElapsedSec() + 0.5f));
+      snprintf(tBuf, sizeof(tBuf), "%d", program.seq[idx].lengthSec);
+    } else {
+      snprintf(eBuf, sizeof(eBuf), "%d",
+               static_cast<int>(manualElapsedSec + 0.5f));
+      snprintf(tBuf, sizeof(tBuf), "\u221E");
+    }
+    const float menuBtnW = 24.f;
+    const float menuBtnReserve = 44.f;
+    const float durBlockW = 210.f;
+    const float titleBarW = ImGui::GetWindowWidth();
+    ImGui::SameLine(titleBarW - menuBtnReserve - durBlockW);
+    ImGui::BeginGroup();
+    ImGui::TextColored(ImVec4(0.4f, 0.7f, 1.f, 1.f), "duration");
+    ImGui::SameLine();
+    if (loadedFromGnaural && !program.seq.empty()) {
+      int idx = synth.currentPeriodIndex();
+      if (idx >= static_cast<int>(program.seq.size())) idx = 0;
+      float elapsed = synth.periodElapsedSec();
+      float totalSec = static_cast<float>(program.seq[idx].lengthSec);
+      static float durationEditBuf = 0.f;
+      ImGui::PushID("durElapsed");
+      ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.3f, 0.85f, 0.4f, 1.f));
+      ImGui::SetNextItemWidth(56);
+      if (ImGui::InputFloat("##dur", &durationEditBuf, 0, 0, "%.0f",
+                            ImGuiInputTextFlags_EnterReturnsTrue |
+                                ImGuiInputTextFlags_CharsDecimal)) {
+        durationEditBuf = std::clamp(durationEditBuf, 0.f, totalSec);
+        synth.setPeriodElapsedSec(durationEditBuf);
+      }
+      if (!ImGui::IsItemActive()) durationEditBuf = elapsed;
+      ImGui::PopStyleColor();
+      ImGui::SameLine(0, 2);
+      ImGui::TextDisabled("s");
+      ImGui::PopID();
+    } else {
+      ImGui::TextColored(ImVec4(0.3f, 0.85f, 0.4f, 1.f), "%s", eBuf);
+      ImGui::SameLine(0, 2);
+      ImGui::TextDisabled("s");
+    }
+    ImGui::SameLine();
+    ImGui::TextDisabled(loadedFromGnaural ? " / %s s" : " / %s", tBuf);
+    ImGui::EndGroup();
+    ImGui::SameLine(titleBarW - menuBtnReserve);
+    if (ImGui::Button("\u22EE", ImVec2(menuBtnW, 24))) {
       ImGui::OpenPopup("MenuPopup");
     }
     if (ImGui::BeginPopup("MenuPopup")) {
       if (ImGuiWindow *w = ImGui::GetCurrentWindow())
         w->WindowRounding = 12.f;
-      if (paramController.isAiDriven()) {
+      if (loadedFromGnaural) {
         if (ImGui::MenuItem("Return to manual control")) {
-          beatFreq = paramController.currentBeatFreq();
-          int idx = synth.currentPeriodIndex();
-          if (!program.seq.empty() && idx < static_cast<int>(program.seq.size()) &&
-              !program.seq[idx].voices.empty()) {
-            program.seq[idx].voices[0].freqStart = beatFreq;
-            program.seq[idx].voices[0].freqEnd = beatFreq;
+          if (paramController.isAiDriven()) {
+            beatFreq = paramController.currentBeatFreq();
+            int idx = synth.currentPeriodIndex();
+            if (!program.seq.empty() &&
+                idx < static_cast<int>(program.seq.size()) &&
+                !program.seq[idx].voices.empty()) {
+              program.seq[idx].voices[0].freqStart = beatFreq;
+              program.seq[idx].voices[0].freqEnd = beatFreq;
+              synth.setProgram(program);
+            }
+            paramController.clearAiState();
+          } else {
+            program = Program{};
+            program.name = "Theta meditation";
+            program.seq.push_back({
+                .lengthSec = 3600,
+                .voices = {{.freqStart = 4.f, .freqEnd = 4.f, .volume = 0.7f,
+                            .pitch = 161.f, .isochronic = false}},
+                .background = Period::Background::None,
+                .backgroundVol = 0.f,
+            });
             synth.setProgram(program);
+            loadedFromGnaural = false;
+            beatFreq = 4.f;
+            baseFreq = 161.f;
           }
-          paramController.clearAiState();
           ImGui::CloseCurrentPopup();
         }
       } else {
@@ -436,7 +506,8 @@ int main() {
     }
     if (playing && paramController.isAiDriven()) {
       beatFreq = paramController.currentBeatFreq();
-    } else if (playing && !program.seq.empty() && curIdx < static_cast<int>(program.seq.size())) {
+    } else if (playing && !program.seq.empty() &&
+               curIdx < static_cast<int>(program.seq.size())) {
       const Period *curP = synth.currentPeriod();
       if (curP && !curP->voices.empty()) {
         const auto &v = curP->voices[0];
@@ -447,7 +518,8 @@ int main() {
                        : v.freqStart;
         baseFreq = v.pitch > 0.f ? v.pitch : baseFreq;
       }
-    } else if (!program.seq.empty() && curIdx < static_cast<int>(program.seq.size()) &&
+    } else if (!program.seq.empty() &&
+               curIdx < static_cast<int>(program.seq.size()) &&
                !program.seq[curIdx].voices.empty()) {
       beatFreq = program.seq[curIdx].voices[0].freqStart;
       baseFreq = program.seq[curIdx].voices[0].pitch > 0.f
@@ -461,7 +533,10 @@ int main() {
     snprintf(buf, sizeof(buf), "%.1f Hz", beatFreq);
     if (sliderWithButtons("Binaural Beat", &beatFreq, BEAT_MIN, BEAT_MAX,
                           "%.1f Hz", 0.5f, buf, "%.1f", "Hz")) {
-      if (!program.seq.empty() && curIdx < static_cast<int>(program.seq.size()) &&
+      if (!loadedFromGnaural)
+        manualElapsedSec = 0.f;
+      if (!program.seq.empty() &&
+          curIdx < static_cast<int>(program.seq.size()) &&
           !program.seq[curIdx].voices.empty()) {
         program.seq[curIdx].voices[0].freqStart = beatFreq;
         program.seq[curIdx].voices[0].freqEnd = beatFreq;
@@ -503,7 +578,10 @@ int main() {
     snprintf(buf, sizeof(buf), "%.0f Hz", baseFreq);
     if (sliderWithButtons("Base Frequency", &baseFreq, BASE_FREQ_MIN,
                           BASE_FREQ_MAX, "%.0f Hz", 5.f, buf, "%.0f", "Hz")) {
-      if (!program.seq.empty() && curIdx < static_cast<int>(program.seq.size()) &&
+      if (!loadedFromGnaural)
+        manualElapsedSec = 0.f;
+      if (!program.seq.empty() &&
+          curIdx < static_cast<int>(program.seq.size()) &&
           !program.seq[curIdx].voices.empty()) {
         program.seq[curIdx].voices[0].pitch = baseFreq;
         synth.setProgram(program);
@@ -513,6 +591,8 @@ int main() {
 
     if (sliderWithButtons("Balance", &balance, BALANCE_MIN, BALANCE_MAX, "%.2f",
                           0.1f, getBalanceLabel(balance), "%.2f", "")) {
+      if (!loadedFromGnaural)
+        manualElapsedSec = 0.f;
       synth.setBalance(balance);
     }
     ImGui::Spacing();
@@ -521,6 +601,8 @@ int main() {
         !program.seq[curIdx].voices.empty()) {
       bool iso = program.seq[curIdx].voices[0].isochronic;
       if (ImGui::Checkbox("Isochronic", &iso)) {
+        if (!loadedFromGnaural)
+          manualElapsedSec = 0.f;
         program.seq[curIdx].voices[0].isochronic = iso;
         synth.setProgram(program);
       }
@@ -528,6 +610,8 @@ int main() {
       int bg = static_cast<int>(program.seq[curIdx].background);
       const char *bgNames[] = {"No noise", "Pink noise", "White noise"};
       if (ImGui::Combo("Background", &bg, bgNames, 3)) {
+        if (!loadedFromGnaural)
+          manualElapsedSec = 0.f;
         program.seq[curIdx].background = static_cast<Period::Background>(bg);
         synth.setProgram(program);
       }
@@ -542,7 +626,9 @@ int main() {
         ImGui::PushID("NoiseVol");
         ImGui::SetNextItemWidth(noiseW);
         if (ImGui::SliderFloat("##noise", &program.seq[curIdx].backgroundVol,
-                              0.f, 0.5f, "%.2f")) {
+                               0.f, 1.f, "%.2f")) {
+          if (!loadedFromGnaural)
+            manualElapsedSec = 0.f;
           synth.setProgram(program);
         }
         ImGui::PopID();
@@ -569,6 +655,8 @@ int main() {
       if (playing) {
         driver->start(config.sampleRate, config.bufferFrames,
                       [&](std::vector<int16_t> &buf) {
+                        float delta = static_cast<float>(config.bufferFrames) /
+                                      config.sampleRate;
                         paramController.update(synth.periodElapsedSec());
                         synth.fillSamples(buf);
                         for (size_t i = 0; i < buf.size(); i += 8) {
@@ -576,9 +664,9 @@ int main() {
                           float r = buf[i + 1] / 32768.f;
                           waveBuf.push(l, r);
                         }
-                        synth.advanceTime(
-                            static_cast<float>(config.bufferFrames) /
-                            config.sampleRate);
+                        synth.advanceTime(delta);
+                        if (!loadedFromGnaural)
+                          manualElapsedSec += delta;
                       });
       } else {
         paramController.clearAiState();
@@ -626,6 +714,7 @@ int main() {
         if (auto prog = parseGnaural(loadPathBuf)) {
           program = std::move(*prog);
           synth.setProgram(program);
+          loadedFromGnaural = true;
           if (!program.seq.empty() && !program.seq[0].voices.empty()) {
             beatFreq = program.seq[0].voices[0].freqStart;
             baseFreq = program.seq[0].voices[0].pitch > 0

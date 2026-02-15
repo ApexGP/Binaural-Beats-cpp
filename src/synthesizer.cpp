@@ -181,6 +181,14 @@ void Synthesizer::advanceTime(float sec) {
     }
 }
 
+void Synthesizer::setPeriodElapsedSec(float sec) {
+    if (program_.seq.empty()) return;
+    const Period& period = program_.seq[currentPeriodIndex_];
+    periodElapsedSec_ =
+        std::clamp(sec, 0.f, static_cast<float>(period.lengthSec));
+    skewVoices(periodElapsedSec_);
+}
+
 float Synthesizer::voicetoPitch(int voiceIndex) const {
     switch (voiceIndex) {
         case 0:
@@ -219,19 +227,15 @@ void Synthesizer::ensureStateSize() {
             freqs_[j] = period.voices[j].freqStart;
         }
     }
-    if (vols_.size() != n) {
-        vols_.resize(n);
-        for (size_t j = 0; j < n; ++j) {
-            vols_[j] = period.voices[j].volume;
-        }
+    if (vols_.size() != n) vols_.resize(n);
+    for (size_t j = 0; j < n; ++j) {
+        vols_[j] = period.voices[j].volume;
     }
-    if (pitchs_.size() != n) {
-        pitchs_.resize(n);
-        for (size_t j = 0; j < n; ++j) {
-            pitchs_[j] = period.voices[j].pitch < 0
-                            ? voicetoPitch(static_cast<int>(j))
-                            : period.voices[j].pitch;
-        }
+    if (pitchs_.size() != n) pitchs_.resize(n);
+    for (size_t j = 0; j < n; ++j) {
+        pitchs_[j] = period.voices[j].pitch < 0
+                        ? voicetoPitch(static_cast<int>(j))
+                        : period.voices[j].pitch;
     }
     if (isochronic_.size() != n) {
         isochronic_.resize(n);

@@ -31,6 +31,8 @@ public:
     int currentPeriodIndex() const { return currentPeriodIndex_; }
     float periodElapsedSec() const { return periodElapsedSec_; }
     void advanceTime(float sec);
+    /// 设置当前 period 内已播放秒数（用于 seek），自动 clamp 到 [0, lengthSec]
+    void setPeriodElapsedSec(float sec);
 
     /// 当前 Period 指针，供参数控制层使用
     const Period* currentPeriod() const;
