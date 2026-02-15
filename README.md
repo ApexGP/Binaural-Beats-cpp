@@ -23,7 +23,9 @@ make -j4
 
 ## 运行
 
-**CLI**（需 PortAudio，缺少时生成 `output.wav`）：
+### CLI
+
+（需 PortAudio，缺少时生成 `output.wav`）
 
 ```powershell
 .\build\BinauralBeats.exe [options]
@@ -43,21 +45,27 @@ make -j4
 
 播放控制：**Enter** 暂停/恢复，**Q** 退出
 
-**GUI**（需 PortAudio + imgui）：
+### GUI
+
+（需 PortAudio + imgui）
 
 ```powershell
 .\build\BinauralBeatsGui.exe
 ```
 
-### GUI 功能
+GUI 功能
 
 - 节拍频率 (0.5–40 Hz)、基频、平衡、音量
-- 五波段颜色标识（Delta/Theta/Alpha/Beta/Gamma）
-- 频率调整可直接输入
+- 波段颜色标识（Delta/Theta/Alpha/Beta/Gamma）
+- 频率输入支持
 - 等时节拍 (Isochronic) 开关
 - 背景噪声：无 / 粉红 / 白噪声，可调音量
 - 实时波形显示
 - 加载 Gnaural 文件（右上角菜单 ⋮ → Load Gnaural...）：支持 `.txt` 旧格式与 `.gnaural` XML
+
+### Gnaural 预设文件
+
+点击[这里](https://github.com/user-attachments/files/25322281/preset.zip)下载，解压后把 `preset/` 文件夹放到任意目录即可使用
 
 ## TODO
 

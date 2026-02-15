@@ -102,10 +102,10 @@ bool sliderWithButtons(const char *label, float *v, float minV, float maxV,
   ImGui::AlignTextToFramePadding();
   ImGui::Text("%s", label);
   float regionX = ImGui::GetContentRegionAvail().x;
-  ImGui::SameLine(regionX - 78);
+  ImGui::SameLine(regionX - 88);
   ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.4f, 0.6f, 1.0f, 1.0f));
   if (inputFmt && inputFmt[0]) {
-    ImGui::SetNextItemWidth(58);
+    ImGui::SetNextItemWidth(68);
     float tmp = *v;
     if (ImGui::InputFloat("##val", &tmp, 0, 0, inputFmt,
                           ImGuiInputTextFlags_EnterReturnsTrue |
@@ -288,6 +288,7 @@ int main() {
   float volume = 0.7f;
   bool playing = false;
   bool showLoadModal = false;
+  bool showHelpCenter = false;
   char loadPathBuf[512] = "";
   bool loadedFromGnaural = false;
   float manualElapsedSec = 0.f;
@@ -354,7 +355,11 @@ int main() {
     ImGui::SetCursorPos(ImVec2(pad, pad));
     ImGui::BeginChild("TitleBar", ImVec2(-1, titleH), ImGuiChildFlags_None,
                       ImGuiWindowFlags_NoScrollbar);
-    ImGui::TextDisabled("\u23F1"); // stopwatch
+    if (ImGui::Button("\u2753", ImVec2(24, 24))) {
+      showHelpCenter = true;
+    }
+    if (ImGui::IsItemHovered())
+      ImGui::SetTooltip("Help Center");
     ImGui::SameLine(ImGui::GetWindowWidth() / 2.f - 60);
     ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 4);
     ImGui::Text("Binaural Beats");
@@ -381,7 +386,8 @@ int main() {
     ImGui::SameLine();
     if (loadedFromGnaural && !program.seq.empty()) {
       int idx = synth.currentPeriodIndex();
-      if (idx >= static_cast<int>(program.seq.size())) idx = 0;
+      if (idx >= static_cast<int>(program.seq.size()))
+        idx = 0;
       float elapsed = synth.periodElapsedSec();
       float totalSec = static_cast<float>(program.seq[idx].lengthSec);
       static float durationEditBuf = 0.f;
@@ -394,7 +400,8 @@ int main() {
         durationEditBuf = std::clamp(durationEditBuf, 0.f, totalSec);
         synth.setPeriodElapsedSec(durationEditBuf);
       }
-      if (!ImGui::IsItemActive()) durationEditBuf = elapsed;
+      if (!ImGui::IsItemActive())
+        durationEditBuf = elapsed;
       ImGui::PopStyleColor();
       ImGui::SameLine(0, 2);
       ImGui::TextDisabled("s");
@@ -414,9 +421,10 @@ int main() {
     if (ImGui::BeginPopup("MenuPopup")) {
       if (ImGuiWindow *w = ImGui::GetCurrentWindow())
         w->WindowRounding = 12.f;
-      if (loadedFromGnaural) {
+      if (loadedFromGnaural || paramController.isAiDriven()) {
         if (ImGui::MenuItem("Return to manual control")) {
-          if (paramController.isAiDriven()) {
+          const bool wasAiDriven = paramController.isAiDriven();
+          if (wasAiDriven) {
             beatFreq = paramController.currentBeatFreq();
             int idx = synth.currentPeriodIndex();
             if (!program.seq.empty() &&
@@ -427,13 +435,17 @@ int main() {
               synth.setProgram(program);
             }
             paramController.clearAiState();
-          } else {
+          }
+          if (loadedFromGnaural && !wasAiDriven) {
             program = Program{};
             program.name = "Theta meditation";
             program.seq.push_back({
                 .lengthSec = 3600,
-                .voices = {{.freqStart = 4.f, .freqEnd = 4.f, .volume = 0.7f,
-                            .pitch = 161.f, .isochronic = false}},
+                .voices = {{.freqStart = 4.f,
+                            .freqEnd = 4.f,
+                            .volume = 0.7f,
+                            .pitch = 161.f,
+                            .isochronic = false}},
                 .background = Period::Background::None,
                 .backgroundVol = 0.f,
             });
@@ -530,9 +542,9 @@ int main() {
       ImGui::BeginDisabled();
     }
     char buf[32];
-    snprintf(buf, sizeof(buf), "%.1f Hz", beatFreq);
+    snprintf(buf, sizeof(buf), "%.3f Hz", beatFreq);
     if (sliderWithButtons("Binaural Beat", &beatFreq, BEAT_MIN, BEAT_MAX,
-                          "%.1f Hz", 0.5f, buf, "%.1f", "Hz")) {
+                          "%.3f Hz", 0.5f, buf, "%.3f", "Hz")) {
       if (!loadedFromGnaural)
         manualElapsedSec = 0.f;
       if (!program.seq.empty() &&
@@ -575,9 +587,9 @@ int main() {
     }
     ImGui::Spacing();
 
-    snprintf(buf, sizeof(buf), "%.0f Hz", baseFreq);
+    snprintf(buf, sizeof(buf), "%.3f Hz", baseFreq);
     if (sliderWithButtons("Base Frequency", &baseFreq, BASE_FREQ_MIN,
-                          BASE_FREQ_MAX, "%.0f Hz", 5.f, buf, "%.0f", "Hz")) {
+                          BASE_FREQ_MAX, "%.3f Hz", 5.f, buf, "%.3f", "Hz")) {
       if (!loadedFromGnaural)
         manualElapsedSec = 0.f;
       if (!program.seq.empty() &&
@@ -589,8 +601,8 @@ int main() {
     }
     ImGui::Spacing();
 
-    if (sliderWithButtons("Balance", &balance, BALANCE_MIN, BALANCE_MAX, "%.2f",
-                          0.1f, getBalanceLabel(balance), "%.2f", "")) {
+    if (sliderWithButtons("Balance", &balance, BALANCE_MIN, BALANCE_MAX, "%.3f",
+                          0.1f, getBalanceLabel(balance), "%.3f", "")) {
       if (!loadedFromGnaural)
         manualElapsedSec = 0.f;
       synth.setBalance(balance);
@@ -678,6 +690,61 @@ int main() {
 
     ImGui::EndChild();
     ImGui::End();
+
+    if (showHelpCenter) {
+      ImGui::SetNextWindowSize(ImVec2(480, 420), ImGuiCond_FirstUseEver);
+      ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 12.f);
+      if (ImGui::Begin("Help Center", &showHelpCenter,
+                       ImGuiWindowFlags_NoCollapse)) {
+        if (ImGui::BeginChild("HelpContent", ImVec2(0, -30),
+                              ImGuiChildFlags_Border)) {
+          ImGui::TextColored(ImVec4(0.4f, 0.7f, 1.f, 1.f), "Parameters");
+          ImGui::Separator();
+          ImGui::TextWrapped(
+              "Binaural Beat: Frequency difference between left and right "
+              "carriers, producing brainwave entrainment. Ranging from 0.5 to "
+              "40 Hz. ");
+          ImGui::TextWrapped("Bands: Delta(0.5-4), Theta(4-8), Alpha(8-12), "
+                             "Beta(12-30), Gamma(30-40).");
+          ImGui::Spacing();
+          ImGui::TextWrapped(
+              "Base Frequency: Carrier center frequency, typically ranging "
+              "from 40 to 500 Hz. ");
+          ImGui::TextWrapped(
+              "Common: 161 Hz or 200 Hz. Too high may cause discomfort.");
+          ImGui::Spacing();
+          ImGui::TextWrapped(
+              "Balance: -1 for full left, 0 for center, and 1 for full right. "
+              "Adjusts stereo volume ratio.");
+          ImGui::Spacing();
+          ImGui::TextWrapped("Volume: Master output level.");
+          ImGui::TextWrapped("Isochronic: Adds pulsed beats when enabled, "
+                             "works without headphones.");
+          ImGui::TextWrapped("Background: Pink noise, white noise, etc., "
+                             "useful for meditation.");
+          ImGui::Spacing();
+          ImGui::TextColored(ImVec4(0.4f, 0.7f, 1.f, 1.f), "Example Presets");
+          ImGui::Separator();
+          ImGui::TextWrapped(
+              "Meditation/Relax: 4 Hz(Theta), base 161 Hz, 20 to 40 minutes.");
+          ImGui::TextWrapped(
+              "Focus/Study: 12 Hz(Alpha) or 14 Hz(Beta), base 200 Hz.");
+          ImGui::TextWrapped(
+              "Deep sleep: 2 Hz(Delta), low volume, with pink noise.");
+          ImGui::TextWrapped(
+              "Creativity/Light sleep: 6 Hz(Theta), enable isochronic.");
+          ImGui::Spacing();
+          ImGui::TextColored(ImVec4(0.4f, 0.7f, 1.f, 1.f),
+                             "You can also try to load from a Gnaural file in "
+                             "the menu to get started.");
+          ImGui::EndChild();
+        }
+        if (ImGui::Button("Close", ImVec2(80, 0)))
+          showHelpCenter = false;
+        ImGui::End();
+      }
+      ImGui::PopStyleVar();
+    }
 
     if (showLoadModal) {
       ImGui::OpenPopup("Load Gnaural");

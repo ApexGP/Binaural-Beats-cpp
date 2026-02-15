@@ -101,24 +101,25 @@ void Synthesizer::fillSamples(std::vector<int16_t>& outSamples) {
         const float beatFreq = freqs_[j];
         const float vol = vols_[j] * fade * volumeMultiplier_;
 
-        const float incL = (baseFreq + beatFreq) * phaseStepScale;
-        const float incR = baseFreq * phaseStepScale;
-        const float incIso = beatFreq * phaseStepScale;
-
         float phaseL = phasesL_[j];
         float phaseR = phasesR_[j];
         float phaseIso = phasesIso_[j];
 
         if (isochronic_[j]) {
+            // Isochronic: same frequency in both ears, pulsed at beatFreq.
+            // Works without headphones (unlike binaural).
+            const float incCarrier = baseFreq * phaseStepScale;
+            const float incIso = beatFreq * phaseStepScale;
             for (int i = 0; i < numFrames * 2; i += 2) {
                 float gain = 0.f;
                 if (phaseIso < 0.5f) {
                     gain = std::cos(phaseIso * 3.14159265f);
                 }
-                ws[i] += std::sin(TWO_PI * phaseL) * vol * gain;
-                ws[i + 1] += std::sin(TWO_PI * phaseR) * vol * gain;
-                phaseL += incL;
-                phaseR += incR;
+                const float s = std::sin(TWO_PI * phaseL) * vol * gain;
+                ws[i] += s;
+                ws[i + 1] += s;
+                phaseL += incCarrier;
+                phaseR = phaseL;
                 if (phaseL >= 1.0f) phaseL -= 1.0f;
                 if (phaseR >= 1.0f) phaseR -= 1.0f;
                 phaseIso += incIso;
@@ -126,6 +127,8 @@ void Synthesizer::fillSamples(std::vector<int16_t>& outSamples) {
                 if (phaseIso < 0.0f) phaseIso += 1.0f;
             }
         } else {
+            const float incL = (baseFreq + beatFreq) * phaseStepScale;
+            const float incR = baseFreq * phaseStepScale;
             for (int i = 0; i < numFrames * 2; i += 2) {
                 ws[i] += std::sin(TWO_PI * phaseL) * vol;
                 ws[i + 1] += std::sin(TWO_PI * phaseR) * vol;
