@@ -23,11 +23,24 @@ make -j4
 
 ## 运行
 
-**CLI**：
+**CLI**（需 PortAudio，缺少时生成 `output.wav`）：
 
 ```powershell
-.\build\BinauralBeats.exe
+.\build\BinauralBeats.exe [options]
 ```
+
+常用选项：
+
+- `--duration N` 播放时长(秒)
+- `--beatFreq F` 节拍频率
+- `--baseFreq F` 基频
+- `--noise pink|white` 噪声
+- `--isochronic` 等时节拍
+- `--volume F` 音量
+
+使用 `--help` 查看完整用法。
+
+播放控制：**Enter** 暂停/恢复，**Q** 退出
 
 **GUI**（需 PortAudio + imgui）：
 
@@ -43,11 +56,7 @@ make -j4
 - 等时节拍 (Isochronic) 开关
 - 背景噪声：无 / 粉红 / 白噪声，可调音量
 - 实时波形显示
-- 加载 Gnaural 文件（菜单 ⋮ → Load Gnaural...）：支持 `.txt` 旧格式与 `.gnaural` XML
-
-### 字体
-
-GUI 从 `font/` 目录加载字体（可执行文件同目录或上级）。主字体 Noto Sans，其余 `.ttf`/`.otf` 作为 fallback。若不存在则使用系统默认字体。
+- 加载 Gnaural 文件（右上角菜单 ⋮ → Load Gnaural...）：支持 `.txt` 旧格式与 `.gnaural` XML
 
 ## TODO
 

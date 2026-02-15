@@ -469,7 +469,7 @@ int main() {
 
     std::vector<float> samplesL, samplesR;
     waveBuf.getSamples(samplesL, samplesR);
-    if (!samplesL.empty() && playing) {
+    if (!samplesL.empty()) {
       float h = (waveH - 24) / 2.f;
       ImGui::PushStyleColor(ImGuiCol_PlotLines, ImVec4(0.95f, 0.5f, 0.2f, 1.f));
       ImGui::PlotLines("##L", samplesL.data(),
