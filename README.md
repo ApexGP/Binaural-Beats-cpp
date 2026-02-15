@@ -37,8 +37,9 @@ make -j4
 - `--noise pink|white` 噪声
 - `--isochronic` 等时节拍
 - `--volume F` 音量
+- `--file PATH` 加载 .gnaural/.txt 文件
 
-使用 `--help` 查看完整用法。
+使用 `--help` 查看完整用法
 
 播放控制：**Enter** 暂停/恢复，**Q** 退出
 

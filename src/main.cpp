@@ -1,4 +1,5 @@
 #include "binaural/audioDriver.hpp"
+#include "binaural/gnauralParser.hpp"
 #include "binaural/period.hpp"
 #include "binaural/synthesizer.hpp"
 #include "binaural/wavDriver.hpp"
@@ -31,6 +32,7 @@ static void printUsage(const char *prog) {
          "set)\n"
       << "  --isochronic       Use isochronic tones instead of binaural\n"
       << "  --volume F         Master volume 0-1.2 (default: 0.7)\n"
+      << "  --file PATH        Load .gnaural or .txt schedule file\n"
       << "  --help             Print this help\n";
 }
 
@@ -60,6 +62,7 @@ int main(int argc, char *argv[]) {
   float noiseVol = 0.01f;
   bool isochronic = false;
   float volume = 0.7f;
+  std::string gnauralPath;
 
   for (int i = 1; i < argc; ++i) {
     const char *arg = argv[i];
@@ -147,24 +150,44 @@ int main(int argc, char *argv[]) {
       }
       continue;
     }
+    if (std::strcmp(arg, "--file") == 0 || std::strcmp(arg, "-f") == 0) {
+      if (i + 1 >= argc) {
+        std::cerr << "Error: --file requires a path\n";
+        return 1;
+      }
+      gnauralPath = argv[++i];
+      continue;
+    }
     std::cerr << "Unknown option: " << arg << "\nUse --help for usage.\n";
     return 1;
   }
 
   Program program;
-  program.name = "CLI";
-  program.seq.push_back({
-      .lengthSec = durationSec,
-      .voices = {{
-          .freqStart = beatFreq,
-          .freqEnd = beatFreq,
-          .volume = volume,
-          .pitch = baseFreq,
-          .isochronic = isochronic,
-      }},
-      .background = noiseType,
-      .backgroundVol = (noiseType != Period::Background::None) ? noiseVol : 0.f,
-  });
+  bool loadedFromGnaural = false;
+  if (!gnauralPath.empty()) {
+    auto prog = parseGnaural(gnauralPath);
+    if (!prog) {
+      std::cerr << "Error: failed to load " << gnauralPath << "\n";
+      return 1;
+    }
+    program = std::move(*prog);
+    loadedFromGnaural = true;
+  } else {
+    program.name = "CLI";
+    program.seq.push_back({
+        .lengthSec = durationSec,
+        .voices = {{
+            .freqStart = beatFreq,
+            .freqEnd = beatFreq,
+            .volume = volume,
+            .pitch = baseFreq,
+            .isochronic = isochronic,
+        }},
+        .background = noiseType,
+        .backgroundVol =
+            (noiseType != Period::Background::None) ? noiseVol : 0.f,
+    });
+  }
 
   SynthesizerConfig config;
   config.sampleRate = 44100;
@@ -190,9 +213,14 @@ int main(int argc, char *argv[]) {
   }
 
   if (auto *wav = dynamic_cast<WavFileDriver *>(driver.get())) {
-    std::cout << "PortAudio not found. Writing output.wav (" << durationSec
+    int totalSec = 0;
+    for (const auto &p : program.seq)
+      totalSec += p.lengthSec;
+    if (totalSec <= 0)
+      totalSec = durationSec;
+    std::cout << "PortAudio not found. Writing output.wav (" << totalSec
               << " sec)...\n";
-    wav->writeToFile("output.wav", static_cast<float>(durationSec));
+    wav->writeToFile("output.wav", static_cast<float>(totalSec));
     std::cout << "Done. Play output.wav to verify.\n";
     return 0;
   }
@@ -208,14 +236,19 @@ int main(int argc, char *argv[]) {
                          });
   };
 
-  std::cout << "Playing: " << beatFreq << " Hz beat, " << baseFreq
-            << " Hz base (" << durationSec
-            << " s). Press ENTER to pause, Q to quit.\n";
+  if (loadedFromGnaural)
+    std::cout << "Playing in " << program.name
+              << ". Press Enter to pause, Q to quit.\n";
+  else
+    std::cout << "Playing: " << beatFreq << " Hz beat, " << baseFreq
+              << " Hz base (" << durationSec
+              << " s). Press Enter to pause, Q to quit.\n";
   bool playing = true;
   bool quit = false;
   float totalElapsed = 0.f;
   auto playStart = std::chrono::steady_clock::now();
   int lastDisplayedSec = -1;
+  int lastDisplayedTotal = -1;
   int lastState = -1;
 
   while (!quit) {
@@ -244,47 +277,66 @@ int main(int argc, char *argv[]) {
     }
     if (key == '\n' || key == '\r') {
       if (playing) {
-        totalElapsed += std::chrono::duration<float>(
-                            std::chrono::steady_clock::now() - playStart)
-                            .count();
+        if (!loadedFromGnaural)
+          totalElapsed += std::chrono::duration<float>(
+                              std::chrono::steady_clock::now() - playStart)
+                              .count();
         driver->stop();
         playing = false;
       } else {
-        if (totalElapsed >= static_cast<float>(durationSec)) {
+        if (!loadedFromGnaural &&
+            totalElapsed >= static_cast<float>(durationSec)) {
           continue;
         }
         if (startPlayback()) {
           playing = true;
-          playStart = std::chrono::steady_clock::now();
+          if (!loadedFromGnaural)
+            playStart = std::chrono::steady_clock::now();
         } else {
           std::cerr << "Failed to resume.\n";
           return 1;
         }
       }
     }
-    float elapsed =
-        playing
-            ? totalElapsed + std::chrono::duration<float>(
-                                 std::chrono::steady_clock::now() - playStart)
-                                 .count()
-            : totalElapsed;
-    if (playing && elapsed >= static_cast<float>(durationSec)) {
-      driver->stop();
-      playing = false;
-      totalElapsed = static_cast<float>(durationSec);
-      elapsed = totalElapsed;
+    float elapsed;
+    int displayTotal;
+    if (loadedFromGnaural && !program.seq.empty()) {
+      int idx = synth.currentPeriodIndex();
+      if (idx >= static_cast<int>(program.seq.size()))
+        idx = 0;
+      elapsed = synth.periodElapsedSec();
+      displayTotal = program.seq[idx].lengthSec;
+    } else {
+      elapsed = playing ? totalElapsed +
+                              std::chrono::duration<float>(
+                                  std::chrono::steady_clock::now() - playStart)
+                                  .count()
+                        : totalElapsed;
+      displayTotal = durationSec;
+      if (playing && elapsed >= static_cast<float>(durationSec)) {
+        driver->stop();
+        playing = false;
+        totalElapsed = static_cast<float>(durationSec);
+        elapsed = totalElapsed;
+      }
     }
     int displaySec = static_cast<int>(elapsed + 0.5f);
     int stateCode =
-        playing ? 0 : (totalElapsed >= static_cast<float>(durationSec) ? 2 : 1);
-    if (displaySec != lastDisplayedSec || stateCode != lastState) {
+        playing ? 0
+                : (!loadedFromGnaural &&
+                           totalElapsed >= static_cast<float>(durationSec)
+                       ? 2
+                       : 1);
+    if (displaySec != lastDisplayedSec || displayTotal != lastDisplayedTotal ||
+        stateCode != lastState) {
       lastDisplayedSec = displaySec;
+      lastDisplayedTotal = displayTotal;
       lastState = stateCode;
       const char *state = (stateCode == 0)   ? "[Playing]"
                           : (stateCode == 2) ? "[Done]   "
                                              : "[Paused] ";
-      std::cout << "\rduration " << displaySec << " / " << durationSec << " s  "
-                << state << " " << std::flush;
+      std::cout << "\rduration " << displaySec << " / " << displayTotal
+                << " s  " << state << "  " << std::flush;
     }
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
   }
