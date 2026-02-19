@@ -2,6 +2,10 @@
 
 支持双耳节拍、等时节拍、粉红/白噪声、Gnaural 文件解析，预留 AI 闭环接口。
 
+## 下载
+
+在 [Release](https://github.com/ApexGP/Binaural-Beats-cpp/releases) 发布页面下载打包好的压缩包
+
 ## 构建
 
 ### 依赖（vcpkg + MinGW toolchain）
