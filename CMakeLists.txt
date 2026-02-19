@@ -14,6 +14,11 @@ project(BinauralBeats LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 
+# Static-link MinGW runtime (libgcc, libstdc++, winpthread) to avoid DLL dependency
+if(MINGW OR (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND WIN32))
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static-libgcc -static-libstdc++ -Wl,-Bstatic -lwinpthread -Wl,-Bdynamic")
+endif()
+
 add_library(BinauralSrc
     src/gnauralParser.cpp
     src/pinkNoise.cpp
