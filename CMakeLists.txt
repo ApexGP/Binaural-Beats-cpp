@@ -42,7 +42,7 @@ if(portaudio_FOUND)
     target_link_libraries(BinauralBeats PRIVATE BinauralAudio)
 
     if(imgui_FOUND)
-        add_executable(BinauralBeatsGui src/mainGui.cpp)
+        add_executable(BinauralBeatsGui WIN32 src/mainGui.cpp)
         target_link_libraries(BinauralBeatsGui PRIVATE BinauralAudio BinauralWaveform imgui::imgui opengl32)
     else()
         message(STATUS "imgui not found, GUI disabled. Install: vcpkg install imgui[glfw-binding,opengl3-binding]:${VCPKG_TARGET_TRIPLET}")

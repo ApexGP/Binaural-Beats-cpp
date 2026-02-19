@@ -57,6 +57,8 @@ make -j4
 .\build\BinauralBeatsGui.exe
 ```
 
+![GUI 界面](./assets/GUI.png)
+
 GUI 功能
 
 - 节拍频率 (0.5–40 Hz)、基频、平衡、音量
