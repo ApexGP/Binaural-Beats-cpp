@@ -31,6 +31,9 @@ struct AppContext {
   bool loadedFromGnaural = false;
   float manualElapsedSec = 0.f;
   char loadPathBuf[512] = {};
+  bool timedPlaybackEnabled = false;
+  float timedPlaybackDurationSec = 600.f;
+  bool showTimedPlaybackModal = false;
 };
 
 void renderTitleBar(AppContext &ctx);
@@ -39,5 +42,6 @@ void renderBeatDescription(AppContext &ctx);
 void renderControls(AppContext &ctx);
 void renderHelpCenter(AppContext &ctx);
 void renderLoadModal(AppContext &ctx);
+void renderTimedPlaybackModal(AppContext &ctx);
 
 } // namespace gui

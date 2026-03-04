@@ -48,7 +48,12 @@ void renderTitleBar(AppContext &ctx) {
   } else {
     snprintf(eBuf, sizeof(eBuf), "%d",
              static_cast<int>(ctx.manualElapsedSec + 0.5f));
-    snprintf(tBuf, sizeof(tBuf), "\u221E");
+    if (ctx.timedPlaybackEnabled) {
+      snprintf(tBuf, sizeof(tBuf), "%d",
+               static_cast<int>(ctx.timedPlaybackDurationSec + 0.5f));
+    } else {
+      snprintf(tBuf, sizeof(tBuf), "\u221E");
+    }
   }
   const float menuBtnW = 24.f;
   const float menuBtnReserve = 44.f;
@@ -86,7 +91,9 @@ void renderTitleBar(AppContext &ctx) {
     ImGui::TextDisabled("s");
   }
   ImGui::SameLine();
-  ImGui::TextDisabled(ctx.loadedFromGnaural ? " / %s s" : " / %s", tBuf);
+  ImGui::TextDisabled(
+      (ctx.loadedFromGnaural || ctx.timedPlaybackEnabled) ? " / %s s" : " / %s",
+      tBuf);
   ImGui::EndGroup();
   ImGui::SameLine(titleBarW - menuBtnReserve);
   if (ImGui::Button("\u22EE", ImVec2(menuBtnW, 24))) {
@@ -95,7 +102,14 @@ void renderTitleBar(AppContext &ctx) {
   if (ImGui::BeginPopup("MenuPopup")) {
     if (ImGuiWindow *w = ImGui::GetCurrentWindow())
       w->WindowRounding = 12.f;
-    if (ctx.loadedFromGnaural || ctx.paramController.isAiDriven()) {
+    if (ctx.timedPlaybackEnabled && !ctx.loadedFromGnaural &&
+        !ctx.paramController.isAiDriven()) {
+      if (ImGui::MenuItem("Exit timed playback")) {
+        ctx.timedPlaybackEnabled = false;
+        ctx.manualElapsedSec = 0.f;
+        ImGui::CloseCurrentPopup();
+      }
+    } else if (ctx.loadedFromGnaural || ctx.paramController.isAiDriven()) {
       if (ImGui::MenuItem("Return to manual control")) {
         const bool wasAiDriven = ctx.paramController.isAiDriven();
         if (wasAiDriven) {
@@ -128,12 +142,17 @@ void renderTitleBar(AppContext &ctx) {
           ctx.beatFreq = 4.f;
           ctx.baseFreq = 161.f;
         }
+        ctx.manualElapsedSec = 0.f;
         ImGui::CloseCurrentPopup();
       }
     } else {
       if (ImGui::MenuItem("Load Gnaural...")) {
         ctx.loadPathBuf[0] = '\0';
         ctx.showLoadModal = true;
+        ImGui::CloseCurrentPopup();
+      }
+      if (ImGui::MenuItem("Timed playback...")) {
+        ctx.showTimedPlaybackModal = true;
         ImGui::CloseCurrentPopup();
       }
       if (ImGui::MenuItem("Simulate AI (push 12 Hz)")) {
@@ -486,6 +505,36 @@ void renderLoadModal(AppContext &ctx) {
     }
     ImGui::SameLine();
     if (ImGui::Button("Cancel")) {
+      ImGui::CloseCurrentPopup();
+    }
+    ImGui::EndPopup();
+  }
+  ImGui::PopStyleVar(3);
+}
+
+void renderTimedPlaybackModal(AppContext &ctx) {
+  if (ctx.showTimedPlaybackModal) {
+    ImGui::OpenPopup("Timed Playback");
+    ctx.showTimedPlaybackModal = false;
+  }
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 12.f);
+  ImGui::PushStyleVar(ImGuiStyleVar_PopupRounding, 12.f);
+  ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 12.f);
+  if (ImGui::BeginPopupModal("Timed Playback", nullptr,
+                             ImGuiWindowFlags_AlwaysAutoResize)) {
+    ImGui::Text("Set playback duration (seconds):");
+    ImGui::SetNextItemWidth(120);
+    ImGui::InputFloat("##duration", &ctx.timedPlaybackDurationSec, 60.f, 300.f,
+                      "%.0f", ImGuiInputTextFlags_CharsDecimal);
+    if (ctx.timedPlaybackDurationSec < 1.f)
+      ctx.timedPlaybackDurationSec = 1.f;
+    ImGui::Spacing();
+    if (ImGui::Button("OK", ImVec2(80, 0))) {
+      ctx.timedPlaybackEnabled = true;
+      ImGui::CloseCurrentPopup();
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Cancel", ImVec2(80, 0))) {
       ImGui::CloseCurrentPopup();
     }
     ImGui::EndPopup();

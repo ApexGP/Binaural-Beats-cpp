@@ -1,7 +1,5 @@
 #include "gui/guiUtils.hpp"
-#include "imgui_internal.h"
 #include <algorithm>
-#include <cstdio>
 
 namespace gui {
 

@@ -6,6 +6,7 @@
 #include "binaural/waveformBuffer.hpp"
 #include "gui/guiFonts.hpp"
 #include "gui/guiPanels.hpp"
+#include "gui/mainLoop.hpp"
 #include "gui/guiUtils.hpp"
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
@@ -61,6 +62,9 @@ int main() {
       .showHelpCenter = false,
       .loadedFromGnaural = false,
       .manualElapsedSec = 0.f,
+      .timedPlaybackEnabled = false,
+      .timedPlaybackDurationSec = 600.f,
+      .showTimedPlaybackModal = false,
   };
 
   auto driver = createPortAudioDriver();
@@ -77,8 +81,8 @@ int main() {
   glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
   glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-  GLFWwindow *window = glfwCreateWindow(gui::WIDTH, gui::HEIGHT, "Binaural Beats",
-                                        nullptr, nullptr);
+  GLFWwindow *window = glfwCreateWindow(gui::WIDTH, gui::HEIGHT,
+                                        "Binaural Beats", nullptr, nullptr);
   if (!window) {
     glfwTerminate();
     return 1;
@@ -98,41 +102,12 @@ int main() {
   ImGui_ImplGlfw_InitForOpenGL(window, true);
   ImGui_ImplOpenGL3_Init("#version 330");
 
+  gui::RenderFrameData frameData{&ctx, window, &paramController, driver.get()};
+  gui::installDragRenderSubclass(window, frameData);
+
   while (!glfwWindowShouldClose(window)) {
     glfwPollEvents();
-
-    ImGui_ImplOpenGL3_NewFrame();
-    ImGui_ImplGlfw_NewFrame();
-    ImGui::NewFrame();
-
-    int winW, winH;
-    glfwGetFramebufferSize(window, &winW, &winH);
-    ImGui::SetNextWindowPos(ImVec2(0, 0));
-    ImGui::SetNextWindowSize(
-        ImVec2(static_cast<float>(winW), static_cast<float>(winH)));
-    ImGui::Begin("Main", nullptr,
-                 ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
-                     ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
-                     ImGuiWindowFlags_NoCollapse);
-
-    gui::renderTitleBar(ctx);
-    gui::renderWaveform(ctx);
-    gui::renderBeatDescription(ctx);
-    gui::renderControls(ctx);
-
-    ImGui::End();
-
-    gui::renderHelpCenter(ctx);
-    gui::renderLoadModal(ctx);
-
-    ImGui::Render();
-    int displayW, displayH;
-    glfwGetFramebufferSize(window, &displayW, &displayH);
-    glViewport(0, 0, displayW, displayH);
-    glClearColor(0.12f, 0.12f, 0.14f, 1.f);
-    glClear(GL_COLOR_BUFFER_BIT);
-    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-    glfwSwapBuffers(window);
+    gui::doOneRenderFrame(frameData);
   }
 
   if (ctx.playing) {
