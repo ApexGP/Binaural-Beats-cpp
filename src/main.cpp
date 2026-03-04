@@ -86,9 +86,9 @@ int main(int argc, char *argv[]) {
         std::cerr << "Error: --beatFreq requires a value\n";
         return 1;
       }
-      if (!parseFloat(argv[++i], beatFreq) || beatFreq < 0.5f ||
+      if (!parseFloat(argv[++i], beatFreq) || beatFreq < 0.f ||
           beatFreq > 40.f) {
-        std::cerr << "Error: beatFreq must be 0.5-40\n";
+        std::cerr << "Error: beatFreq must be 0-40\n";
         return 1;
       }
       continue;
@@ -98,9 +98,9 @@ int main(int argc, char *argv[]) {
         std::cerr << "Error: --baseFreq requires a value\n";
         return 1;
       }
-      if (!parseFloat(argv[++i], baseFreq) || baseFreq < 40.f ||
+      if (!parseFloat(argv[++i], baseFreq) || baseFreq < 0.f ||
           baseFreq > 500.f) {
-        std::cerr << "Error: baseFreq must be 40-500\n";
+        std::cerr << "Error: baseFreq must be 0-500\n";
         return 1;
       }
       continue;

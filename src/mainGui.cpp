@@ -1,257 +1,19 @@
 #include "binaural/audioDriver.hpp"
-#include "binaural/eegPredictorInterface.hpp"
-#include "binaural/gnauralParser.hpp"
 #include "binaural/parameterController.hpp"
 #include "binaural/period.hpp"
 #include "binaural/synthesizer.hpp"
 #include "binaural/wavDriver.hpp"
 #include "binaural/waveformBuffer.hpp"
+#include "gui/guiFonts.hpp"
+#include "gui/guiPanels.hpp"
+#include "gui/guiUtils.hpp"
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
-#include "imgui_internal.h"
 #include <GLFW/glfw3.h>
-#include <algorithm>
-#include <cstdio>
-#include <filesystem>
 #include <memory>
-#include <string>
-#include <vector>
-
-#ifdef _WIN32
-// clang-format off: windows.h must precede commdlg.h
-#include <windows.h>
-#include <commdlg.h>
-// clang-format on
-#endif
 
 using namespace binaural;
-
-namespace {
-constexpr int WIDTH = 960;
-constexpr int HEIGHT = 720;
-constexpr float BEAT_MIN = 0.5f;
-constexpr float BEAT_MAX = 40.f;
-constexpr float BASE_FREQ_MIN = 40.f;
-constexpr float BASE_FREQ_MAX = 500.f;
-constexpr float BALANCE_MIN = -1.f;
-constexpr float BALANCE_MAX = 1.f;
-constexpr float VOL_MIN = 0.f;
-constexpr float VOL_MAX = 1.2f;
-
-const char *getBeatDescription(float hz) {
-  if (hz < 4.f)
-    return "Delta waves are associated with deep sleep cycles and the release "
-           "of physical awareness.";
-  if (hz < 8.f)
-    return "Theta waves are linked to meditation, creativity, and light sleep.";
-  if (hz < 12.f)
-    return "Alpha waves are associated with relaxed wakefulness and calm "
-           "focus.";
-  if (hz < 30.f)
-    return "Beta waves are associated with active thinking, focus, and "
-           "alertness.";
-  return "Gamma waves are associated with higher cognition and peak "
-         "concentration.";
-}
-
-const char *getBalanceLabel(float b) {
-  if (b < -0.3f)
-    return "Left";
-  if (b > 0.3f)
-    return "Right";
-  return "Center";
-}
-
-void applyDarkTheme() {
-  ImGui::StyleColorsDark();
-  ImVec4 *colors = ImGui::GetStyle().Colors;
-  const ImVec4 grayBg(0.12f, 0.12f, 0.14f, 1.00f);
-  colors[ImGuiCol_WindowBg] = grayBg;
-  colors[ImGuiCol_ChildBg] = grayBg;
-  colors[ImGuiCol_Separator] = grayBg;
-  colors[ImGuiCol_FrameBg] = ImVec4(0.20f, 0.20f, 0.22f, 1.00f);
-  colors[ImGuiCol_FrameBgHovered] = ImVec4(0.28f, 0.28f, 0.30f, 1.00f);
-  colors[ImGuiCol_FrameBgActive] = ImVec4(0.35f, 0.35f, 0.38f, 1.00f);
-  colors[ImGuiCol_SliderGrab] = ImVec4(1.00f, 1.00f, 1.00f, 0.80f);
-  colors[ImGuiCol_SliderGrabActive] = ImVec4(0.90f, 0.90f, 0.90f, 1.00f);
-  colors[ImGuiCol_Button] = ImVec4(0.25f, 0.25f, 0.28f, 1.00f);
-  colors[ImGuiCol_ButtonHovered] = ImVec4(0.35f, 0.35f, 0.38f, 1.00f);
-  colors[ImGuiCol_ButtonActive] = ImVec4(0.45f, 0.55f, 0.75f, 1.00f);
-  colors[ImGuiCol_Header] = ImVec4(0.20f, 0.45f, 0.80f, 0.60f);
-  colors[ImGuiCol_HeaderHovered] = ImVec4(0.25f, 0.50f, 0.85f, 0.80f);
-  colors[ImGuiCol_HeaderActive] = ImVec4(0.30f, 0.55f, 0.90f, 1.00f);
-  colors[ImGuiCol_Text] = ImVec4(1.00f, 1.00f, 1.00f, 1.00f);
-  colors[ImGuiCol_TextDisabled] = ImVec4(0.55f, 0.55f, 0.55f, 1.00f);
-  ImGui::GetStyle().FrameRounding = 12.f;
-  ImGui::GetStyle().GrabRounding = 12.f;
-  ImGui::GetStyle().WindowRounding = 0.f;
-  ImGui::GetStyle().PopupRounding = 12.f;
-  ImGui::GetStyle().WindowBorderSize = 0.f;
-  ImGui::GetStyle().ChildBorderSize = 0.f;
-  ImGui::GetStyle().WindowPadding = ImVec2(16.f, 12.f);
-}
-
-bool sliderWithButtons(const char *label, float *v, float minV, float maxV,
-                       const char *fmt, float step, const char *valueLabel,
-                       const char *inputFmt = nullptr,
-                       const char *unitSuffix = nullptr) {
-  bool changed = false;
-  ImGui::PushID(label);
-  ImGui::BeginGroup();
-  ImGui::AlignTextToFramePadding();
-  ImGui::Text("%s", label);
-  float regionX = ImGui::GetContentRegionAvail().x;
-  ImGui::SameLine(regionX - 88);
-  ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.4f, 0.6f, 1.0f, 1.0f));
-  if (inputFmt && inputFmt[0]) {
-    ImGui::SetNextItemWidth(68);
-    float tmp = *v;
-    if (ImGui::InputFloat("##val", &tmp, 0, 0, inputFmt,
-                          ImGuiInputTextFlags_EnterReturnsTrue |
-                              ImGuiInputTextFlags_CharsDecimal)) {
-      *v = (std::max)(minV, (std::min)(maxV, tmp));
-      changed = true;
-    }
-    if (unitSuffix && unitSuffix[0]) {
-      ImGui::SameLine(0, 2);
-      ImGui::Text("%s", unitSuffix);
-    }
-  } else {
-    ImGui::Text("%s", valueLabel);
-  }
-  ImGui::PopStyleColor();
-  ImGui::Spacing();
-  const float btnReserve = 72.f;
-  float avail = ImGui::GetContentRegionAvail().x - btnReserve;
-  if (avail < 0)
-    avail = 0;
-  ImGui::PushButtonRepeat(true);
-  if (ImGui::Button("-", ImVec2(28, 28))) {
-    *v = (std::max)(minV, *v - step);
-    changed = true;
-  }
-  ImGui::SameLine();
-  ImGui::SetNextItemWidth(avail);
-  if (ImGui::SliderFloat("##slider", v, minV, maxV, nullptr,
-                         ImGuiSliderFlags_NoInput)) {
-    changed = true;
-  }
-  ImGui::SameLine();
-  if (ImGui::Button("+", ImVec2(28, 28))) {
-    *v = (std::min)(maxV, *v + step);
-    changed = true;
-  }
-  ImGui::PopButtonRepeat();
-  ImGui::EndGroup();
-  ImGui::PopID();
-  return changed;
-}
-
-std::string getFontDir() {
-  namespace fs = std::filesystem;
-  std::string fontDir;
-#ifdef _WIN32
-  wchar_t exePath[MAX_PATH];
-  if (GetModuleFileNameW(nullptr, exePath, MAX_PATH) > 0) {
-    fs::path p(exePath);
-    for (int i = 0; i < 3; ++i) {
-      auto dir = p.parent_path() / "font";
-      if (fs::exists(dir))
-        return dir.string();
-      p = p.parent_path();
-    }
-  }
-#endif
-  for (const char *rel : {"font", "../font", "../../font"}) {
-    if (fs::exists(rel))
-      return rel;
-  }
-  return "";
-}
-
-void loadFontsFromDir() {
-  namespace fs = std::filesystem;
-  ImGuiIO &io = ImGui::GetIO();
-  std::string fontDir = getFontDir();
-  if (fontDir.empty()) {
-    io.Fonts->AddFontDefault();
-    return;
-  }
-  const float fontSize = 20.0f;
-  static const ImWchar *iconRanges = nullptr;
-  static ImVector<ImWchar> iconRangesBuf;
-  {
-    ImFontGlyphRangesBuilder b;
-    b.AddRanges(io.Fonts->GetGlyphRangesDefault());
-    b.AddChar(0x23F1);
-    b.AddChar(0x22EE);
-    b.AddChar(0x25B6);
-    b.AddChar(0x221E); // ∞ infinity
-    b.AddChar(0xEB7C);
-    b.AddChar(0xEB10);
-    b.AddChar(0xEB2C);
-    b.BuildRanges(&iconRangesBuf);
-    iconRanges = iconRangesBuf.Data;
-  }
-  const char *defaultOrder[] = {
-      "NotoSans-SemiBold.ttf",
-      "NotoSansSymbols-SemiBold.ttf",
-      "NotoSansSymbols-VariableFont_wght.ttf",
-      "JetBrainsMonoNerdFontMono-Regular.ttf",
-  };
-  ImFont *baseFont = nullptr;
-  for (const char *name : defaultOrder) {
-    std::string path = fontDir + "/" + name;
-    if (fs::exists(path)) {
-      baseFont = io.Fonts->AddFontFromFileTTF(path.c_str(), fontSize, nullptr,
-                                              iconRanges);
-      if (baseFont)
-        break;
-    }
-  }
-  if (!baseFont) {
-    for (const auto &e : fs::directory_iterator(fontDir)) {
-      if (e.path().extension() == ".ttf" || e.path().extension() == ".otf") {
-        baseFont = io.Fonts->AddFontFromFileTTF(e.path().string().c_str(),
-                                                fontSize, nullptr, iconRanges);
-        if (baseFont)
-          break;
-      }
-    }
-  }
-  if (baseFont) {
-    ImFontConfig cfg;
-    cfg.MergeMode = true;
-    std::string basePath;
-    for (const char *name : defaultOrder) {
-      std::string path = fontDir + "/" + name;
-      if (fs::exists(path)) {
-        basePath = path;
-        break;
-      }
-    }
-    if (basePath.empty()) {
-      for (const auto &e : fs::directory_iterator(fontDir)) {
-        if (e.path().extension() == ".ttf" || e.path().extension() == ".otf") {
-          basePath = e.path().string();
-          break;
-        }
-      }
-    }
-    for (const auto &e : fs::directory_iterator(fontDir)) {
-      std::string p = e.path().string();
-      if ((e.path().extension() == ".ttf" || e.path().extension() == ".otf") &&
-          p != basePath) {
-        io.Fonts->AddFontFromFileTTF(p.c_str(), fontSize, &cfg, iconRanges);
-      }
-    }
-    io.FontDefault = baseFont;
-  } else {
-    io.Fonts->AddFontDefault();
-  }
-}
-} // namespace
 
 int main() {
   Program program;
@@ -282,21 +44,30 @@ int main() {
 
   WaveformBuffer waveBuf(2048);
 
-  float beatFreq = 4.f;
-  float baseFreq = 161.f;
-  float balance = 0.f;
-  float volume = 0.7f;
-  bool playing = false;
-  bool showLoadModal = false;
-  bool showHelpCenter = false;
-  char loadPathBuf[512] = "";
-  bool loadedFromGnaural = false;
-  float manualElapsedSec = 0.f;
+  gui::AppContext ctx{
+      .program = program,
+      .synth = synth,
+      .paramController = paramController,
+      .predQueue = predQueue,
+      .waveBuf = waveBuf,
+      .config = config,
+      .driver = nullptr,
+      .beatFreq = 4.f,
+      .baseFreq = 161.f,
+      .balance = 0.f,
+      .volume = 0.7f,
+      .playing = false,
+      .showLoadModal = false,
+      .showHelpCenter = false,
+      .loadedFromGnaural = false,
+      .manualElapsedSec = 0.f,
+  };
 
   auto driver = createPortAudioDriver();
   if (dynamic_cast<WavFileDriver *>(driver.get())) {
     return 1;
   }
+  ctx.driver = driver.get();
 
   if (!glfwInit()) {
     return 1;
@@ -306,8 +77,8 @@ int main() {
   glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
   glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-  GLFWwindow *window =
-      glfwCreateWindow(WIDTH, HEIGHT, "Binaural Beats", nullptr, nullptr);
+  GLFWwindow *window = glfwCreateWindow(gui::WIDTH, gui::HEIGHT, "Binaural Beats",
+                                        nullptr, nullptr);
   if (!window) {
     glfwTerminate();
     return 1;
@@ -321,9 +92,8 @@ int main() {
   io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 
   io.Fonts->Clear();
-  loadFontsFromDir();
-
-  applyDarkTheme();
+  gui::loadFontsFromDir();
+  gui::applyDarkTheme();
 
   ImGui_ImplGlfw_InitForOpenGL(window, true);
   ImGui_ImplOpenGL3_Init("#version 330");
@@ -345,459 +115,15 @@ int main() {
                      ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
                      ImGuiWindowFlags_NoCollapse);
 
-    const float pad = 20.f;
-    const float titleH = 48.f;
-    const float waveH = 140.f;
-    const float descH = 44.f;
-    const float ctrlH = 36.f;
-    const float ctrlGap = 8.f;
+    gui::renderTitleBar(ctx);
+    gui::renderWaveform(ctx);
+    gui::renderBeatDescription(ctx);
+    gui::renderControls(ctx);
 
-    ImGui::SetCursorPos(ImVec2(pad, pad));
-    ImGui::BeginChild("TitleBar", ImVec2(-1, titleH), ImGuiChildFlags_None,
-                      ImGuiWindowFlags_NoScrollbar);
-    if (ImGui::Button("\u2753", ImVec2(24, 24))) {
-      showHelpCenter = true;
-    }
-    if (ImGui::IsItemHovered())
-      ImGui::SetTooltip("Help Center");
-    ImGui::SameLine(ImGui::GetWindowWidth() / 2.f - 60);
-    ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 4);
-    ImGui::Text("Binaural Beats");
-    char eBuf[16], tBuf[16];
-    if (loadedFromGnaural && !program.seq.empty()) {
-      int idx = synth.currentPeriodIndex();
-      if (idx >= static_cast<int>(program.seq.size()))
-        idx = 0;
-      snprintf(eBuf, sizeof(eBuf), "%d",
-               static_cast<int>(synth.periodElapsedSec() + 0.5f));
-      snprintf(tBuf, sizeof(tBuf), "%d", program.seq[idx].lengthSec);
-    } else {
-      snprintf(eBuf, sizeof(eBuf), "%d",
-               static_cast<int>(manualElapsedSec + 0.5f));
-      snprintf(tBuf, sizeof(tBuf), "\u221E");
-    }
-    const float menuBtnW = 24.f;
-    const float menuBtnReserve = 44.f;
-    const float durBlockW = 210.f;
-    const float titleBarW = ImGui::GetWindowWidth();
-    ImGui::SameLine(titleBarW - menuBtnReserve - durBlockW);
-    ImGui::BeginGroup();
-    ImGui::TextColored(ImVec4(0.4f, 0.7f, 1.f, 1.f), "duration");
-    ImGui::SameLine();
-    if (loadedFromGnaural && !program.seq.empty()) {
-      int idx = synth.currentPeriodIndex();
-      if (idx >= static_cast<int>(program.seq.size()))
-        idx = 0;
-      float elapsed = synth.periodElapsedSec();
-      float totalSec = static_cast<float>(program.seq[idx].lengthSec);
-      static float durationEditBuf = 0.f;
-      ImGui::PushID("durElapsed");
-      ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.3f, 0.85f, 0.4f, 1.f));
-      ImGui::SetNextItemWidth(56);
-      if (ImGui::InputFloat("##dur", &durationEditBuf, 0, 0, "%.0f",
-                            ImGuiInputTextFlags_EnterReturnsTrue |
-                                ImGuiInputTextFlags_CharsDecimal)) {
-        durationEditBuf = std::clamp(durationEditBuf, 0.f, totalSec);
-        synth.setPeriodElapsedSec(durationEditBuf);
-      }
-      if (!ImGui::IsItemActive())
-        durationEditBuf = elapsed;
-      ImGui::PopStyleColor();
-      ImGui::SameLine(0, 2);
-      ImGui::TextDisabled("s");
-      ImGui::PopID();
-    } else {
-      ImGui::TextColored(ImVec4(0.3f, 0.85f, 0.4f, 1.f), "%s", eBuf);
-      ImGui::SameLine(0, 2);
-      ImGui::TextDisabled("s");
-    }
-    ImGui::SameLine();
-    ImGui::TextDisabled(loadedFromGnaural ? " / %s s" : " / %s", tBuf);
-    ImGui::EndGroup();
-    ImGui::SameLine(titleBarW - menuBtnReserve);
-    if (ImGui::Button("\u22EE", ImVec2(menuBtnW, 24))) {
-      ImGui::OpenPopup("MenuPopup");
-    }
-    if (ImGui::BeginPopup("MenuPopup")) {
-      if (ImGuiWindow *w = ImGui::GetCurrentWindow())
-        w->WindowRounding = 12.f;
-      if (loadedFromGnaural || paramController.isAiDriven()) {
-        if (ImGui::MenuItem("Return to manual control")) {
-          const bool wasAiDriven = paramController.isAiDriven();
-          if (wasAiDriven) {
-            beatFreq = paramController.currentBeatFreq();
-            int idx = synth.currentPeriodIndex();
-            if (!program.seq.empty() &&
-                idx < static_cast<int>(program.seq.size()) &&
-                !program.seq[idx].voices.empty()) {
-              program.seq[idx].voices[0].freqStart = beatFreq;
-              program.seq[idx].voices[0].freqEnd = beatFreq;
-              synth.setProgram(program);
-            }
-            paramController.clearAiState();
-          }
-          if (loadedFromGnaural && !wasAiDriven) {
-            program = Program{};
-            program.name = "Theta meditation";
-            program.seq.push_back({
-                .lengthSec = 3600,
-                .voices = {{.freqStart = 4.f,
-                            .freqEnd = 4.f,
-                            .volume = 0.7f,
-                            .pitch = 161.f,
-                            .isochronic = false}},
-                .background = Period::Background::None,
-                .backgroundVol = 0.f,
-            });
-            synth.setProgram(program);
-            loadedFromGnaural = false;
-            beatFreq = 4.f;
-            baseFreq = 161.f;
-          }
-          ImGui::CloseCurrentPopup();
-        }
-      } else {
-        if (ImGui::MenuItem("Load Gnaural...")) {
-          loadPathBuf[0] = '\0';
-          showLoadModal = true;
-          ImGui::CloseCurrentPopup();
-        }
-        if (ImGui::MenuItem("Simulate AI (push 12 Hz)")) {
-          EEGStatePrediction p;
-          p.state = EEGStatePrediction::State::Relaxed;
-          p.targetBeatFreq = 12.f;
-          p.confidence = 0.9f;
-          predQueue.push(p);
-          ImGui::CloseCurrentPopup();
-        }
-      }
-      ImGui::EndPopup();
-    }
-    ImGui::EndChild();
-
-    ImGui::SetCursorPos(ImVec2(pad, pad + titleH));
-    ImGui::BeginChild("Waveform", ImVec2(-1, waveH), ImGuiChildFlags_None);
-    ImGui::BeginChild("WaveArea", ImVec2(-1, -1), ImGuiChildFlags_None);
-
-    std::vector<float> samplesL, samplesR;
-    waveBuf.getSamples(samplesL, samplesR);
-    if (!samplesL.empty()) {
-      float h = (waveH - 24) / 2.f;
-      ImGui::PushStyleColor(ImGuiCol_PlotLines, ImVec4(0.95f, 0.5f, 0.2f, 1.f));
-      ImGui::PlotLines("##L", samplesL.data(),
-                       static_cast<int>(samplesL.size()), 0, nullptr, -1.f, 1.f,
-                       ImVec2(-1, h));
-      ImGui::PlotLines("##R", samplesR.data(),
-                       static_cast<int>(samplesR.size()), 0, nullptr, -1.f, 1.f,
-                       ImVec2(-1, h));
-      ImGui::PopStyleColor();
-    } else {
-      ImGui::SetCursorPos(ImVec2(ImGui::GetContentRegionAvail().x / 2.f - 40,
-                                 (waveH - 24) / 2.f - 8));
-      ImGui::TextColored(ImVec4(0.4f, 0.4f, 0.45f, 1.f), "Waveform");
-    }
-    ImGui::EndChild();
-    ImGui::EndChild();
-
-    ImGui::SetCursorPos(ImVec2(pad, pad + titleH + waveH));
-    ImGui::PushTextWrapPos(ImGui::GetContentRegionAvail().x +
-                           ImGui::GetCursorScreenPos().x);
-    ImGui::TextColored(ImVec4(0.85f, 0.85f, 0.9f, 1.f), "%s",
-                       getBeatDescription(beatFreq));
-    ImGui::PopTextWrapPos();
-    ImGui::Spacing();
-
-    ImGui::SetCursorPos(ImVec2(pad, pad + titleH + waveH + descH));
-    ImGui::BeginChild("Controls", ImVec2(-1, -1), ImGuiChildFlags_None);
-
-    int curIdx = 0;
-    if (!program.seq.empty()) {
-      curIdx = synth.currentPeriodIndex();
-      if (curIdx >= static_cast<int>(program.seq.size()))
-        curIdx = 0;
-    }
-    if (playing && paramController.isAiDriven()) {
-      beatFreq = paramController.currentBeatFreq();
-    } else if (playing && !program.seq.empty() &&
-               curIdx < static_cast<int>(program.seq.size())) {
-      const Period *curP = synth.currentPeriod();
-      if (curP && !curP->voices.empty()) {
-        const auto &v = curP->voices[0];
-        float len = static_cast<float>(curP->lengthSec);
-        float pos = synth.periodElapsedSec();
-        beatFreq = (len > 0.f)
-                       ? (v.freqStart + (v.freqEnd - v.freqStart) * (pos / len))
-                       : v.freqStart;
-        baseFreq = v.pitch > 0.f ? v.pitch : baseFreq;
-      }
-    } else if (!program.seq.empty() &&
-               curIdx < static_cast<int>(program.seq.size()) &&
-               !program.seq[curIdx].voices.empty()) {
-      beatFreq = program.seq[curIdx].voices[0].freqStart;
-      baseFreq = program.seq[curIdx].voices[0].pitch > 0.f
-                     ? program.seq[curIdx].voices[0].pitch
-                     : baseFreq;
-    }
-    if (paramController.isAiDriven()) {
-      ImGui::BeginDisabled();
-    }
-    char buf[32];
-    snprintf(buf, sizeof(buf), "%.3f Hz", beatFreq);
-    if (sliderWithButtons("Binaural Beat", &beatFreq, BEAT_MIN, BEAT_MAX,
-                          "%.3f Hz", 0.5f, buf, "%.3f", "Hz")) {
-      if (!loadedFromGnaural)
-        manualElapsedSec = 0.f;
-      if (!program.seq.empty() &&
-          curIdx < static_cast<int>(program.seq.size()) &&
-          !program.seq[curIdx].voices.empty()) {
-        program.seq[curIdx].voices[0].freqStart = beatFreq;
-        program.seq[curIdx].voices[0].freqEnd = beatFreq;
-        synth.setProgram(program);
-      }
-    }
-    if (paramController.isAiDriven()) {
-      ImGui::EndDisabled();
-    }
-    constexpr float BAND_RANGES[] = {3.5f, 4.f, 4.f, 18.f, 10.f};
-    constexpr float BAND_TOTAL = 39.5f;
-    const float bandAvail = ImGui::GetContentRegionAvail().x - 72.f;
-    if (bandAvail > 0) {
-      ImGui::SetCursorPosX(28);
-      const ImVec4 bandColors[] = {
-          ImVec4(0.9f, 0.25f, 0.2f, 1.f),  ImVec4(0.95f, 0.5f, 0.2f, 1.f),
-          ImVec4(0.95f, 0.85f, 0.2f, 1.f), ImVec4(0.3f, 0.75f, 0.35f, 1.f),
-          ImVec4(0.6f, 0.35f, 0.85f, 1.f),
-      };
-      const float gap = 1.f;
-      const float totalBandW = bandAvail - 4.f * gap;
-      for (int i = 0; i < 5; ++i) {
-        if (i > 0)
-          ImGui::SameLine(0, gap);
-        const float w = (BAND_RANGES[i] / BAND_TOTAL) * totalBandW;
-        if (w >= 2.f) {
-          ImGui::PushID(i);
-          ImGui::PushStyleColor(ImGuiCol_Button, bandColors[i]);
-          ImGui::PushStyleColor(ImGuiCol_ButtonHovered, bandColors[i]);
-          ImGui::PushStyleColor(ImGuiCol_ButtonActive, bandColors[i]);
-          ImGui::Button("##band", ImVec2(w, 8));
-          ImGui::PopStyleColor(3);
-          ImGui::PopID();
-        }
-      }
-    }
-    ImGui::Spacing();
-
-    snprintf(buf, sizeof(buf), "%.3f Hz", baseFreq);
-    if (sliderWithButtons("Base Frequency", &baseFreq, BASE_FREQ_MIN,
-                          BASE_FREQ_MAX, "%.3f Hz", 5.f, buf, "%.3f", "Hz")) {
-      if (!loadedFromGnaural)
-        manualElapsedSec = 0.f;
-      if (!program.seq.empty() &&
-          curIdx < static_cast<int>(program.seq.size()) &&
-          !program.seq[curIdx].voices.empty()) {
-        program.seq[curIdx].voices[0].pitch = baseFreq;
-        synth.setProgram(program);
-      }
-    }
-    ImGui::Spacing();
-
-    if (sliderWithButtons("Balance", &balance, BALANCE_MIN, BALANCE_MAX, "%.3f",
-                          0.1f, getBalanceLabel(balance), "%.3f", "")) {
-      if (!loadedFromGnaural)
-        manualElapsedSec = 0.f;
-      synth.setBalance(balance);
-    }
-    ImGui::Spacing();
-
-    if (!program.seq.empty() && curIdx < static_cast<int>(program.seq.size()) &&
-        !program.seq[curIdx].voices.empty()) {
-      bool iso = program.seq[curIdx].voices[0].isochronic;
-      if (ImGui::Checkbox("Isochronic", &iso)) {
-        if (!loadedFromGnaural)
-          manualElapsedSec = 0.f;
-        program.seq[curIdx].voices[0].isochronic = iso;
-        synth.setProgram(program);
-      }
-      ImGui::SameLine(120);
-      int bg = static_cast<int>(program.seq[curIdx].background);
-      const char *bgNames[] = {"No noise", "Pink noise", "White noise"};
-      if (ImGui::Combo("Background", &bg, bgNames, 3)) {
-        if (!loadedFromGnaural)
-          manualElapsedSec = 0.f;
-        program.seq[curIdx].background = static_cast<Period::Background>(bg);
-        synth.setProgram(program);
-      }
-      if (program.seq[curIdx].background != Period::Background::None) {
-        ImGui::Spacing();
-        ImGui::AlignTextToFramePadding();
-        ImGui::Text("Noise");
-        ImGui::SameLine(70);
-        float noiseW = ImGui::GetContentRegionAvail().x - 20.f;
-        if (noiseW < 80.f)
-          noiseW = 80.f;
-        ImGui::PushID("NoiseVol");
-        ImGui::SetNextItemWidth(noiseW);
-        if (ImGui::SliderFloat("##noise", &program.seq[curIdx].backgroundVol,
-                               0.f, 1.f, "%.2f")) {
-          if (!loadedFromGnaural)
-            manualElapsedSec = 0.f;
-          synth.setProgram(program);
-        }
-        ImGui::PopID();
-      }
-    }
-    ImGui::Spacing();
-
-    ImGui::AlignTextToFramePadding();
-    ImGui::Text("Volume");
-    ImGui::SameLine(70);
-    const float btnW = playing ? 60.f : 40.f;
-    const float reserve = btnW + 40.f;
-    float volW = ImGui::GetContentRegionAvail().x - reserve;
-    if (volW < 0)
-      volW = 0;
-    ImGui::SetNextItemWidth(volW);
-    if (ImGui::SliderFloat("##vol", &volume, VOL_MIN, VOL_MAX, "%.2f")) {
-      synth.setVolumeMultiplier(volume);
-    }
-    ImGui::SameLine();
-    const char *playLabel = playing ? "Stop" : "\u25B6"; // play
-    if (ImGui::Button(playLabel, ImVec2(btnW, 32))) {
-      playing = !playing;
-      if (playing) {
-        driver->start(config.sampleRate, config.bufferFrames,
-                      [&](std::vector<int16_t> &buf) {
-                        float delta = static_cast<float>(config.bufferFrames) /
-                                      config.sampleRate;
-                        paramController.update(synth.periodElapsedSec());
-                        synth.fillSamples(buf);
-                        for (size_t i = 0; i < buf.size(); i += 8) {
-                          float l = buf[i] / 32768.f;
-                          float r = buf[i + 1] / 32768.f;
-                          waveBuf.push(l, r);
-                        }
-                        synth.advanceTime(delta);
-                        if (!loadedFromGnaural)
-                          manualElapsedSec += delta;
-                      });
-      } else {
-        paramController.clearAiState();
-        driver->stop();
-      }
-    }
-    ImGui::SameLine();
-    ImGui::Dummy(ImVec2(12, 0));
-
-    ImGui::EndChild();
     ImGui::End();
 
-    if (showHelpCenter) {
-      ImGui::SetNextWindowSize(ImVec2(480, 420), ImGuiCond_FirstUseEver);
-      ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 12.f);
-      if (ImGui::Begin("Help Center", &showHelpCenter,
-                       ImGuiWindowFlags_NoCollapse)) {
-        if (ImGui::BeginChild("HelpContent", ImVec2(0, -30),
-                              ImGuiChildFlags_Border)) {
-          ImGui::TextColored(ImVec4(0.4f, 0.7f, 1.f, 1.f), "Parameters");
-          ImGui::Separator();
-          ImGui::TextWrapped(
-              "Binaural Beat: Frequency difference between left and right "
-              "carriers, producing brainwave entrainment. Ranging from 0.5 to "
-              "40 Hz. ");
-          ImGui::TextWrapped("Bands: Delta(0.5-4), Theta(4-8), Alpha(8-12), "
-                             "Beta(12-30), Gamma(30-40).");
-          ImGui::Spacing();
-          ImGui::TextWrapped(
-              "Base Frequency: Carrier center frequency, typically ranging "
-              "from 40 to 500 Hz. ");
-          ImGui::TextWrapped(
-              "Common: 161 Hz or 200 Hz. Too high may cause discomfort.");
-          ImGui::Spacing();
-          ImGui::TextWrapped(
-              "Balance: -1 for full left, 0 for center, and 1 for full right. "
-              "Adjusts stereo volume ratio.");
-          ImGui::Spacing();
-          ImGui::TextWrapped("Volume: Master output level.");
-          ImGui::TextWrapped("Isochronic: Adds pulsed beats when enabled, "
-                             "works without headphones.");
-          ImGui::TextWrapped("Background: Pink noise, white noise, etc., "
-                             "useful for meditation.");
-          ImGui::Spacing();
-          ImGui::TextColored(ImVec4(0.4f, 0.7f, 1.f, 1.f), "Example Presets");
-          ImGui::Separator();
-          ImGui::TextWrapped(
-              "Meditation/Relax: 4 Hz(Theta), base 161 Hz, 20 to 40 minutes.");
-          ImGui::TextWrapped(
-              "Focus/Study: 12 Hz(Alpha) or 14 Hz(Beta), base 200 Hz.");
-          ImGui::TextWrapped(
-              "Deep sleep: 2 Hz(Delta), low volume, with pink noise.");
-          ImGui::TextWrapped(
-              "Creativity/Light sleep: 6 Hz(Theta), enable isochronic.");
-          ImGui::Spacing();
-          ImGui::TextColored(ImVec4(0.4f, 0.7f, 1.f, 1.f),
-                             "You can also try to load from a Gnaural file in "
-                             "the menu to get started.");
-          ImGui::EndChild();
-        }
-        if (ImGui::Button("Close", ImVec2(80, 0)))
-          showHelpCenter = false;
-        ImGui::End();
-      }
-      ImGui::PopStyleVar();
-    }
-
-    if (showLoadModal) {
-      ImGui::OpenPopup("Load Gnaural");
-      showLoadModal = false;
-    }
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 12.f);
-    ImGui::PushStyleVar(ImGuiStyleVar_PopupRounding, 12.f);
-    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 12.f);
-    if (ImGui::BeginPopupModal("Load Gnaural", nullptr,
-                               ImGuiWindowFlags_AlwaysAutoResize)) {
-      ImGui::Text("File path (.txt or .gnaural):");
-      ImGui::SetNextItemWidth(400);
-      ImGui::InputText("##path", loadPathBuf, sizeof(loadPathBuf));
-#ifdef _WIN32
-      if (ImGui::Button("Browse...")) {
-        wchar_t pathW[512] = {};
-        OPENFILENAMEW ofn = {};
-        ofn.lStructSize = sizeof(ofn);
-        ofn.lpstrFilter =
-            L"Gnaural (*.txt;*.gnaural)\0*.txt;*.gnaural\0All (*.*)\0*.*\0";
-        ofn.lpstrFile = pathW;
-        ofn.nMaxFile = 512;
-        ofn.Flags = OFN_FILEMUSTEXIST;
-        if (GetOpenFileNameW(&ofn)) {
-          char pathA[512];
-          WideCharToMultiByte(CP_UTF8, 0, pathW, -1, pathA, 512, 0, 0);
-          strncpy(loadPathBuf, pathA, sizeof(loadPathBuf) - 1);
-          loadPathBuf[sizeof(loadPathBuf) - 1] = '\0';
-        }
-      }
-      ImGui::SameLine();
-#endif
-      if (ImGui::Button("Load")) {
-        if (auto prog = parseGnaural(loadPathBuf)) {
-          program = std::move(*prog);
-          synth.setProgram(program);
-          loadedFromGnaural = true;
-          if (!program.seq.empty() && !program.seq[0].voices.empty()) {
-            beatFreq = program.seq[0].voices[0].freqStart;
-            baseFreq = program.seq[0].voices[0].pitch > 0
-                           ? program.seq[0].voices[0].pitch
-                           : 161.f;
-          }
-          ImGui::CloseCurrentPopup();
-        }
-      }
-      ImGui::SameLine();
-      if (ImGui::Button("Cancel")) {
-        ImGui::CloseCurrentPopup();
-      }
-      ImGui::EndPopup();
-    }
-    ImGui::PopStyleVar(3);
+    gui::renderHelpCenter(ctx);
+    gui::renderLoadModal(ctx);
 
     ImGui::Render();
     int displayW, displayH;
@@ -809,7 +135,7 @@ int main() {
     glfwSwapBuffers(window);
   }
 
-  if (playing) {
+  if (ctx.playing) {
     paramController.clearAiState();
     driver->stop();
   }

@@ -61,7 +61,7 @@ make -j4
 
 GUI 功能
 
-- 节拍频率 (0.5–40 Hz)、基频、平衡、音量
+- 节拍频率 (0–40 Hz)、基频 (0–500 Hz)、平衡、音量
 - 波段颜色标识（Delta/Theta/Alpha/Beta/Gamma）
 - 频率输入支持
 - 等时节拍 (Isochronic) 开关

@@ -6,7 +6,7 @@
 namespace binaural {
 
 namespace {
-constexpr float BEAT_FREQ_MIN = 0.5f;
+constexpr float BEAT_FREQ_MIN = 0.f;
 constexpr float BEAT_FREQ_MAX = 40.f;
 } // namespace
 
