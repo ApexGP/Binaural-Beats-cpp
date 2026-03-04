@@ -68,6 +68,7 @@ GUI 功能
 - 背景噪声：无 / 粉红 / 白噪声，可调音量
 - 实时波形显示
 - 加载 Gnaural 文件（右上角菜单 ⋮ → Load Gnaural...）：支持 `.txt` 旧格式与 `.gnaural` XML
+- 定时播放（右上角菜单 ⋮ → Timed playback...）
 
 ### Gnaural 预设文件
 
