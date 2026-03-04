@@ -38,6 +38,16 @@ void renderTitleBar(AppContext &ctx) {
   ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 4);
   ImGui::Text("Binaural Beats");
   char eBuf[16], tBuf[16];
+  static float frozenManualElapsed = 0.f;
+  static bool modalWasOpen = false;
+  if (ctx.modalOpen) {
+    if (!modalWasOpen)
+      frozenManualElapsed = ctx.manualElapsedSec;
+    modalWasOpen = true;
+  } else {
+    modalWasOpen = false;
+  }
+  const bool modalOpen = ctx.modalOpen;
   if (ctx.loadedFromGnaural && !ctx.program.seq.empty()) {
     int idx = ctx.synth.currentPeriodIndex();
     if (idx >= static_cast<int>(ctx.program.seq.size()))
@@ -46,8 +56,10 @@ void renderTitleBar(AppContext &ctx) {
              static_cast<int>(ctx.synth.periodElapsedSec() + 0.5f));
     snprintf(tBuf, sizeof(tBuf), "%d", ctx.program.seq[idx].lengthSec);
   } else {
+    const float elapsedForDisplay =
+        modalOpen ? frozenManualElapsed : ctx.manualElapsedSec;
     snprintf(eBuf, sizeof(eBuf), "%d",
-             static_cast<int>(ctx.manualElapsedSec + 0.5f));
+             static_cast<int>(elapsedForDisplay + 0.5f));
     if (ctx.timedPlaybackEnabled) {
       snprintf(tBuf, sizeof(tBuf), "%d",
                static_cast<int>(ctx.timedPlaybackDurationSec + 0.5f));
@@ -457,15 +469,15 @@ void renderHelpCenter(AppContext &ctx) {
 }
 
 void renderLoadModal(AppContext &ctx) {
-  if (ctx.showLoadModal) {
-    ImGui::OpenPopup("Load Gnaural");
-    ctx.showLoadModal = false;
-  }
+  ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(),
+                          ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+  ImGui::SetNextWindowSize(ImVec2(480, 0), ImGuiCond_Appearing);
   ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 12.f);
   ImGui::PushStyleVar(ImGuiStyleVar_PopupRounding, 12.f);
   ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 12.f);
   if (ImGui::BeginPopupModal("Load Gnaural", nullptr,
                              ImGuiWindowFlags_AlwaysAutoResize)) {
+    ctx.modalOpen = true;
     ImGui::Text("File path (.txt or .gnaural):");
     ImGui::SetNextItemWidth(400);
     ImGui::InputText("##path", ctx.loadPathBuf, sizeof(ctx.loadPathBuf));
@@ -513,15 +525,15 @@ void renderLoadModal(AppContext &ctx) {
 }
 
 void renderTimedPlaybackModal(AppContext &ctx) {
-  if (ctx.showTimedPlaybackModal) {
-    ImGui::OpenPopup("Timed Playback");
-    ctx.showTimedPlaybackModal = false;
-  }
+  ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(),
+                          ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+  ImGui::SetNextWindowSize(ImVec2(320, 0), ImGuiCond_Appearing);
   ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 12.f);
   ImGui::PushStyleVar(ImGuiStyleVar_PopupRounding, 12.f);
   ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 12.f);
   if (ImGui::BeginPopupModal("Timed Playback", nullptr,
                              ImGuiWindowFlags_AlwaysAutoResize)) {
+    ctx.modalOpen = true;
     ImGui::Text("Set playback duration (seconds):");
     ImGui::SetNextItemWidth(120);
     ImGui::InputFloat("##duration", &ctx.timedPlaybackDurationSec, 60.f, 300.f,
@@ -531,6 +543,7 @@ void renderTimedPlaybackModal(AppContext &ctx) {
     ImGui::Spacing();
     if (ImGui::Button("OK", ImVec2(80, 0))) {
       ctx.timedPlaybackEnabled = true;
+      ctx.manualElapsedSec = 0.f;
       ImGui::CloseCurrentPopup();
     }
     ImGui::SameLine();

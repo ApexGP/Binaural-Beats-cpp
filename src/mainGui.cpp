@@ -65,6 +65,7 @@ int main() {
       .timedPlaybackEnabled = false,
       .timedPlaybackDurationSec = 600.f,
       .showTimedPlaybackModal = false,
+      .modalOpen = false,
   };
 
   auto driver = createPortAudioDriver();

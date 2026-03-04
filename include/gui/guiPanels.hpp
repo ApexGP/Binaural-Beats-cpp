@@ -34,6 +34,7 @@ struct AppContext {
   bool timedPlaybackEnabled = false;
   float timedPlaybackDurationSec = 600.f;
   bool showTimedPlaybackModal = false;
+  bool modalOpen = false;
 };
 
 void renderTitleBar(AppContext &ctx);

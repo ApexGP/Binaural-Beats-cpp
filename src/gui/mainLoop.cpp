@@ -28,6 +28,20 @@ void doOneRenderFrame(RenderFrameData &data) {
   ImGui::SetNextWindowPos(ImVec2(0, 0));
   ImGui::SetNextWindowSize(
       ImVec2(static_cast<float>(winW), static_cast<float>(winH)));
+
+  ctx.modalOpen = false;
+  if (ctx.showLoadModal) {
+    ImGui::OpenPopup("Load Gnaural");
+    ctx.showLoadModal = false;
+  }
+  if (ctx.showTimedPlaybackModal) {
+    ImGui::OpenPopup("Timed Playback");
+    ctx.showTimedPlaybackModal = false;
+  }
+
+  renderLoadModal(ctx);
+  renderTimedPlaybackModal(ctx);
+
   ImGui::Begin("Main", nullptr,
                ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
                    ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
@@ -41,8 +55,6 @@ void doOneRenderFrame(RenderFrameData &data) {
   ImGui::End();
 
   renderHelpCenter(ctx);
-  renderLoadModal(ctx);
-  renderTimedPlaybackModal(ctx);
 
   if (data.paramController && data.driver &&
       ctx.playing && !ctx.loadedFromGnaural && ctx.timedPlaybackEnabled &&
