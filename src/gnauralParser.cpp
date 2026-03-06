@@ -2,6 +2,12 @@
 #include <fstream>
 #include <sstream>
 #include <regex>
+#include <vector>
+
+#ifdef _WIN32
+#include <windows.h>
+#include <cstdio>
+#endif
 
 namespace binaural {
 
@@ -176,11 +182,25 @@ std::optional<Program> parseGnauralFromString(const std::string& content,
 }
 
 std::optional<Program> parseGnaural(const std::string& path) {
+#ifdef _WIN32
+    int wideLen = MultiByteToWideChar(CP_UTF8, 0, path.c_str(), -1, nullptr, 0);
+    if (wideLen <= 0) return std::nullopt;
+    std::vector<wchar_t> pathW(static_cast<size_t>(wideLen));
+    MultiByteToWideChar(CP_UTF8, 0, path.c_str(), -1, pathW.data(), wideLen);
+    FILE* fp = _wfopen(pathW.data(), L"rb");
+    if (!fp) return std::nullopt;
+    std::string content;
+    char buf[4096];
+    while (size_t n = fread(buf, 1, sizeof(buf), fp))
+        content.append(buf, n);
+    fclose(fp);
+#else
     std::ifstream f(path);
     if (!f) return std::nullopt;
     std::string content((std::istreambuf_iterator<char>(f)),
                         std::istreambuf_iterator<char>());
     f.close();
+#endif
     return parseGnauralFromString(content, path);
 }
 

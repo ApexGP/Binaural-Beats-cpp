@@ -86,6 +86,35 @@ void loadFontsFromDir() {
   if (baseFont) {
     ImFontConfig cfg;
     cfg.MergeMode = true;
+    const ImWchar *chineseRanges = io.Fonts->GetGlyphRangesChineseSimplifiedCommon();
+    const char *cjkFonts[] = {
+        "NotoSansCJKsc-Regular.otf",
+        "NotoSansCJK-Regular.ttc",
+        "SourceHanSansSC-Regular.otf",
+    };
+    bool cjkMerged = false;
+    for (const char *name : cjkFonts) {
+      std::string path = fontDir + "/" + name;
+      if (fs::exists(path)) {
+        io.Fonts->AddFontFromFileTTF(path.c_str(), fontSize, &cfg, chineseRanges);
+        cjkMerged = true;
+        break;
+      }
+    }
+#ifdef _WIN32
+    if (!cjkMerged) {
+      const char *winCjkPaths[] = {
+          "C:\\Windows\\Fonts\\msyh.ttc",
+          "C:\\Windows\\Fonts\\simsun.ttc",
+      };
+      for (const char *path : winCjkPaths) {
+        if (fs::exists(path)) {
+          io.Fonts->AddFontFromFileTTF(path, fontSize, &cfg, chineseRanges);
+          break;
+        }
+      }
+    }
+#endif
     std::string basePath;
     for (const char *name : defaultOrder) {
       std::string path = fontDir + "/" + name;
