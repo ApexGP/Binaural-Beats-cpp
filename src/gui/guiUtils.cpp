@@ -56,19 +56,35 @@ void applyDarkTheme() {
   ImGui::GetStyle().WindowPadding = ImVec2(16.f, 12.f);
 }
 
+void applyScaledStyle(float scale) {
+  ImGuiStyle &s = ImGui::GetStyle();
+  s.ItemSpacing = ImVec2(8.f * scale, 4.f * scale);
+  s.ItemInnerSpacing = ImVec2(4.f * scale, 4.f * scale);
+  s.FramePadding = ImVec2(4.f * scale, 2.f * scale);
+  s.WindowPadding = ImVec2(16.f * scale, 12.f * scale);
+  s.FrameRounding = std::max(4.f, 12.f * scale);
+  s.GrabRounding = std::max(4.f, 12.f * scale);
+  s.PopupRounding = std::max(4.f, 12.f * scale);
+  s.GrabMinSize = std::max(8.f, 16.f * scale);
+}
+
 bool sliderWithButtons(const char *label, float *v, float minV, float maxV,
                        const char *fmt, float step, const char *valueLabel,
-                       const char *inputFmt, const char *unitSuffix) {
+                       const char *inputFmt, const char *unitSuffix,
+                       float scale) {
   bool changed = false;
+  const float valW = 68.f * scale;
+  const float btnReserve = 72.f * scale;
+  const float btnSz = 28.f * scale;
   ImGui::PushID(label);
   ImGui::BeginGroup();
   ImGui::AlignTextToFramePadding();
   ImGui::Text("%s", label);
   float regionX = ImGui::GetContentRegionAvail().x;
-  ImGui::SameLine(regionX - 88);
+  ImGui::SameLine(regionX - (valW + 20.f * scale));
   ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.4f, 0.6f, 1.0f, 1.0f));
   if (inputFmt && inputFmt[0]) {
-    ImGui::SetNextItemWidth(68);
+    ImGui::SetNextItemWidth(valW);
     float tmp = *v;
     if (ImGui::InputFloat("##val", &tmp, 0, 0, inputFmt,
                           ImGuiInputTextFlags_EnterReturnsTrue |
@@ -85,12 +101,11 @@ bool sliderWithButtons(const char *label, float *v, float minV, float maxV,
   }
   ImGui::PopStyleColor();
   ImGui::Spacing();
-  const float btnReserve = 72.f;
   float avail = ImGui::GetContentRegionAvail().x - btnReserve;
   if (avail < 0)
     avail = 0;
   ImGui::PushButtonRepeat(true);
-  if (ImGui::Button("-", ImVec2(28, 28))) {
+  if (ImGui::Button("-", ImVec2(btnSz, btnSz))) {
     *v = (std::max)(minV, *v - step);
     changed = true;
   }
@@ -101,7 +116,7 @@ bool sliderWithButtons(const char *label, float *v, float minV, float maxV,
     changed = true;
   }
   ImGui::SameLine();
-  if (ImGui::Button("+", ImVec2(28, 28))) {
+  if (ImGui::Button("+", ImVec2(btnSz, btnSz))) {
     *v = (std::min)(maxV, *v + step);
     changed = true;
   }

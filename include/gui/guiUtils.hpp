@@ -7,6 +7,8 @@ namespace gui {
 // Layout constants
 constexpr int WIDTH = 960;
 constexpr int HEIGHT = 720;
+constexpr float REF_WIDTH = 960.f;
+constexpr float REF_HEIGHT = 720.f;
 constexpr float BEAT_MIN = 0.f;
 constexpr float BEAT_MAX = 40.f;
 constexpr float BASE_FREQ_MIN = 0.f;
@@ -19,10 +21,11 @@ constexpr float VOL_MAX = 1.2f;
 const char *getBeatDescription(float hz);
 const char *getBalanceLabel(float b);
 void applyDarkTheme();
+void applyScaledStyle(float scale);
 
 bool sliderWithButtons(const char *label, float *v, float minV, float maxV,
                        const char *fmt, float step, const char *valueLabel,
                        const char *inputFmt = nullptr,
-                       const char *unitSuffix = nullptr);
+                       const char *unitSuffix = nullptr, float scale = 1.f);
 
 } // namespace gui

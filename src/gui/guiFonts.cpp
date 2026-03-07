@@ -1,7 +1,9 @@
 #include "gui/guiFonts.hpp"
-#include "imgui.h"
+
 #include <filesystem>
 #include <string>
+
+#include "imgui.h"
 
 #ifdef _WIN32
 #include <windows.h>
@@ -19,21 +21,19 @@ std::string getFontDir() {
     fs::path p(exePath);
     for (int i = 0; i < 3; ++i) {
       auto dir = p.parent_path() / "font";
-      if (fs::exists(dir))
-        return dir.string();
+      if (fs::exists(dir)) return dir.string();
       p = p.parent_path();
     }
   }
 #endif
   for (const char *rel : {"font", "../font", "../../font"}) {
-    if (fs::exists(rel))
-      return rel;
+    if (fs::exists(rel)) return rel;
   }
   return "";
 }
-} // namespace
+}  // namespace
 
-void loadFontsFromDir() {
+void loadFontsFromDir(float dpiScale) {
   namespace fs = std::filesystem;
   ImGuiIO &io = ImGui::GetIO();
   std::string fontDir = getFontDir();
@@ -41,7 +41,8 @@ void loadFontsFromDir() {
     io.Fonts->AddFontDefault();
     return;
   }
-  const float fontSize = 20.0f;
+  if (dpiScale < 0.5f) dpiScale = 1.f;
+  const float fontSize = 16.0f * dpiScale;
   static const ImWchar *iconRanges = nullptr;
   static ImVector<ImWchar> iconRangesBuf;
   {
@@ -50,7 +51,7 @@ void loadFontsFromDir() {
     b.AddChar(0x23F1);
     b.AddChar(0x22EE);
     b.AddChar(0x25B6);
-    b.AddChar(0x221E); // ∞ infinity
+    b.AddChar(0x221E);  // ∞ infinity
     b.AddChar(0xEB7C);
     b.AddChar(0xEB10);
     b.AddChar(0xEB2C);
@@ -69,8 +70,7 @@ void loadFontsFromDir() {
     if (fs::exists(path)) {
       baseFont = io.Fonts->AddFontFromFileTTF(path.c_str(), fontSize, nullptr,
                                               iconRanges);
-      if (baseFont)
-        break;
+      if (baseFont) break;
     }
   }
   if (!baseFont) {
@@ -78,15 +78,15 @@ void loadFontsFromDir() {
       if (e.path().extension() == ".ttf" || e.path().extension() == ".otf") {
         baseFont = io.Fonts->AddFontFromFileTTF(e.path().string().c_str(),
                                                 fontSize, nullptr, iconRanges);
-        if (baseFont)
-          break;
+        if (baseFont) break;
       }
     }
   }
   if (baseFont) {
     ImFontConfig cfg;
     cfg.MergeMode = true;
-    const ImWchar *chineseRanges = io.Fonts->GetGlyphRangesChineseSimplifiedCommon();
+    const ImWchar *chineseRanges =
+        io.Fonts->GetGlyphRangesChineseSimplifiedCommon();
     const char *cjkFonts[] = {
         "NotoSansCJKsc-Regular.otf",
         "NotoSansCJK-Regular.ttc",
@@ -96,7 +96,8 @@ void loadFontsFromDir() {
     for (const char *name : cjkFonts) {
       std::string path = fontDir + "/" + name;
       if (fs::exists(path)) {
-        io.Fonts->AddFontFromFileTTF(path.c_str(), fontSize, &cfg, chineseRanges);
+        io.Fonts->AddFontFromFileTTF(path.c_str(), fontSize, &cfg,
+                                     chineseRanges);
         cjkMerged = true;
         break;
       }
@@ -144,4 +145,4 @@ void loadFontsFromDir() {
   }
 }
 
-} // namespace gui
+}  // namespace gui

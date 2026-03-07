@@ -19,23 +19,26 @@
 namespace gui {
 
 namespace {
-constexpr float PAD = 20.f;
-constexpr float TITLE_H = 48.f;
-constexpr float WAVE_H = 140.f;
-constexpr float DESC_H = 44.f;
+constexpr float PAD_BASE = 20.f;
+constexpr float TITLE_H_BASE = 48.f;
+constexpr float WAVE_H_BASE = 140.f;
+constexpr float DESC_H_BASE = 44.f;
 } // namespace
 
 void renderTitleBar(AppContext &ctx) {
-  ImGui::SetCursorPos(ImVec2(PAD, PAD));
-  ImGui::BeginChild("TitleBar", ImVec2(-1, TITLE_H), ImGuiChildFlags_None,
+  const float s = ctx.uiScale;
+  const float pad = PAD_BASE * s;
+  const float titleH = TITLE_H_BASE * s;
+  ImGui::SetCursorPos(ImVec2(pad, pad));
+  ImGui::BeginChild("TitleBar", ImVec2(-1, titleH), ImGuiChildFlags_None,
                     ImGuiWindowFlags_NoScrollbar);
-  if (ImGui::Button("\u2753", ImVec2(24, 24))) {
+  if (ImGui::Button("\u2753", ImVec2(24 * s, 24 * s))) {
     ctx.showHelpCenter = true;
   }
   if (ImGui::IsItemHovered())
     ImGui::SetTooltip("Help Center");
-  ImGui::SameLine(ImGui::GetWindowWidth() / 2.f - 60);
-  ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 4);
+  ImGui::SameLine(ImGui::GetWindowWidth() / 2.f - 60 * s);
+  ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 4 * s);
   ImGui::Text("Binaural Beats");
   char eBuf[16], tBuf[16];
   static float frozenManualElapsed = 0.f;
@@ -67,9 +70,9 @@ void renderTitleBar(AppContext &ctx) {
       snprintf(tBuf, sizeof(tBuf), "\u221E");
     }
   }
-  const float menuBtnW = 24.f;
-  const float menuBtnReserve = 44.f;
-  const float durBlockW = 210.f;
+  const float menuBtnW = 24.f * s;
+  const float menuBtnReserve = 44.f * s;
+  const float durBlockW = 210.f * s;
   const float titleBarW = ImGui::GetWindowWidth();
   ImGui::SameLine(titleBarW - menuBtnReserve - durBlockW);
   ImGui::BeginGroup();
@@ -84,7 +87,7 @@ void renderTitleBar(AppContext &ctx) {
     static float durationEditBuf = 0.f;
     ImGui::PushID("durElapsed");
     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.3f, 0.85f, 0.4f, 1.f));
-    ImGui::SetNextItemWidth(56);
+    ImGui::SetNextItemWidth(56 * s);
     if (ImGui::InputFloat("##dur", &durationEditBuf, 0, 0, "%.0f",
                           ImGuiInputTextFlags_EnterReturnsTrue |
                               ImGuiInputTextFlags_CharsDecimal)) {
@@ -108,7 +111,7 @@ void renderTitleBar(AppContext &ctx) {
       tBuf);
   ImGui::EndGroup();
   ImGui::SameLine(titleBarW - menuBtnReserve);
-  if (ImGui::Button("\u22EE", ImVec2(menuBtnW, 24))) {
+  if (ImGui::Button("\u22EE", ImVec2(menuBtnW, 24 * s))) {
     ImGui::OpenPopup("MenuPopup");
   }
   if (ImGui::BeginPopup("MenuPopup")) {
@@ -182,13 +185,17 @@ void renderTitleBar(AppContext &ctx) {
 }
 
 void renderWaveform(AppContext &ctx) {
-  ImGui::SetCursorPos(ImVec2(PAD, PAD + TITLE_H));
-  ImGui::BeginChild("Waveform", ImVec2(-1, WAVE_H), ImGuiChildFlags_None);
+  const float s = ctx.uiScale;
+  const float pad = PAD_BASE * s;
+  const float titleH = TITLE_H_BASE * s;
+  const float waveH = WAVE_H_BASE * s;
+  ImGui::SetCursorPos(ImVec2(pad, pad + titleH));
+  ImGui::BeginChild("Waveform", ImVec2(-1, waveH), ImGuiChildFlags_None);
   ImGui::BeginChild("WaveArea", ImVec2(-1, -1), ImGuiChildFlags_None);
   std::vector<float> samplesL, samplesR;
   ctx.waveBuf.getSamples(samplesL, samplesR);
   if (!samplesL.empty()) {
-    float h = (WAVE_H - 24) / 2.f;
+    float h = (waveH - 24 * s) / 2.f;
     ImGui::PushStyleColor(ImGuiCol_PlotLines, ImVec4(0.95f, 0.5f, 0.2f, 1.f));
     ImGui::PlotLines("##L", samplesL.data(),
                      static_cast<int>(samplesL.size()), 0, nullptr, -1.f, 1.f,
@@ -198,8 +205,8 @@ void renderWaveform(AppContext &ctx) {
                      ImVec2(-1, h));
     ImGui::PopStyleColor();
   } else {
-    ImGui::SetCursorPos(ImVec2(ImGui::GetContentRegionAvail().x / 2.f - 40,
-                               (WAVE_H - 24) / 2.f - 8));
+    ImGui::SetCursorPos(ImVec2(ImGui::GetContentRegionAvail().x / 2.f - 40 * s,
+                               (waveH - 24 * s) / 2.f - 8 * s));
     ImGui::TextColored(ImVec4(0.4f, 0.4f, 0.45f, 1.f), "Waveform");
   }
   ImGui::EndChild();
@@ -207,7 +214,11 @@ void renderWaveform(AppContext &ctx) {
 }
 
 void renderBeatDescription(AppContext &ctx) {
-  ImGui::SetCursorPos(ImVec2(PAD, PAD + TITLE_H + WAVE_H));
+  const float s = ctx.uiScale;
+  const float pad = PAD_BASE * s;
+  const float titleH = TITLE_H_BASE * s;
+  const float waveH = WAVE_H_BASE * s;
+  ImGui::SetCursorPos(ImVec2(pad, pad + titleH + waveH));
   ImGui::PushTextWrapPos(ImGui::GetContentRegionAvail().x +
                          ImGui::GetCursorScreenPos().x);
   ImGui::TextColored(ImVec4(0.85f, 0.85f, 0.9f, 1.f), "%s",
@@ -217,7 +228,12 @@ void renderBeatDescription(AppContext &ctx) {
 }
 
 void renderControls(AppContext &ctx) {
-  ImGui::SetCursorPos(ImVec2(PAD, PAD + TITLE_H + WAVE_H + DESC_H));
+  const float s = ctx.uiScale;
+  const float pad = PAD_BASE * s;
+  const float titleH = TITLE_H_BASE * s;
+  const float waveH = WAVE_H_BASE * s;
+  const float descH = DESC_H_BASE * s;
+  ImGui::SetCursorPos(ImVec2(pad, pad + titleH + waveH + descH));
   ImGui::BeginChild("Controls", ImVec2(-1, -1), ImGuiChildFlags_None);
 
   int curIdx = 0;
@@ -255,7 +271,7 @@ void renderControls(AppContext &ctx) {
   char buf[32];
   snprintf(buf, sizeof(buf), "%.3f Hz", ctx.beatFreq);
   if (sliderWithButtons("Binaural Beat", &ctx.beatFreq, BEAT_MIN, BEAT_MAX,
-                        "%.3f Hz", 0.5f, buf, "%.3f", "Hz")) {
+                        "%.3f Hz", 0.5f, buf, "%.3f", "Hz", s)) {
     if (!ctx.loadedFromGnaural)
       ctx.manualElapsedSec = 0.f;
     if (!ctx.program.seq.empty() &&
@@ -272,13 +288,13 @@ void renderControls(AppContext &ctx) {
   // Delta(0-4), Theta(4-8), Alpha(8-12), Beta(12-30), Gamma(30-40), aligned with getBeatDescription
   constexpr float BAND_RANGES[] = {4.f, 4.f, 4.f, 18.f, 10.f};
   constexpr float BAND_TOTAL = 40.f;
-  const float bandAvail = ImGui::GetContentRegionAvail().x - 72.f;
+  const float bandAvail = ImGui::GetContentRegionAvail().x - 72.f * s;
   if (bandAvail > 0) {
-    const float gap = 1.f;
+    const float gap = 1.f * s;
     const float totalBandW = bandAvail - 4.f * gap;
     const float leftPad = (0.5f / BAND_TOTAL) * totalBandW;
     const float actualBandW = totalBandW - leftPad;
-    ImGui::SetCursorPosX(28 + leftPad);
+    ImGui::SetCursorPosX(28 * s + leftPad);
     const ImVec4 bandColors[] = {
         ImVec4(0.9f, 0.25f, 0.2f, 1.f),  ImVec4(0.95f, 0.5f, 0.2f, 1.f),
         ImVec4(0.95f, 0.85f, 0.2f, 1.f), ImVec4(0.3f, 0.75f, 0.35f, 1.f),
@@ -293,7 +309,7 @@ void renderControls(AppContext &ctx) {
         ImGui::PushStyleColor(ImGuiCol_Button, bandColors[i]);
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, bandColors[i]);
         ImGui::PushStyleColor(ImGuiCol_ButtonActive, bandColors[i]);
-        ImGui::Button("##band", ImVec2(w, 8));
+        ImGui::Button("##band", ImVec2(w, 8 * s));
         ImGui::PopStyleColor(3);
         ImGui::PopID();
       }
@@ -303,7 +319,7 @@ void renderControls(AppContext &ctx) {
 
   snprintf(buf, sizeof(buf), "%.3f Hz", ctx.baseFreq);
   if (sliderWithButtons("Base Frequency", &ctx.baseFreq, BASE_FREQ_MIN,
-                        BASE_FREQ_MAX, "%.3f Hz", 5.f, buf, "%.3f", "Hz")) {
+                        BASE_FREQ_MAX, "%.3f Hz", 5.f, buf, "%.3f", "Hz", s)) {
     if (!ctx.loadedFromGnaural)
       ctx.manualElapsedSec = 0.f;
     if (!ctx.program.seq.empty() &&
@@ -317,7 +333,7 @@ void renderControls(AppContext &ctx) {
 
   if (sliderWithButtons("Balance", &ctx.balance, BALANCE_MIN, BALANCE_MAX,
                         "%.3f", 0.1f, getBalanceLabel(ctx.balance), "%.3f",
-                        "")) {
+                        "", s)) {
     if (!ctx.loadedFromGnaural)
       ctx.manualElapsedSec = 0.f;
     ctx.synth.setBalance(ctx.balance);
@@ -334,7 +350,7 @@ void renderControls(AppContext &ctx) {
       ctx.program.seq[curIdx].voices[0].isochronic = iso;
       ctx.synth.setProgram(ctx.program);
     }
-    ImGui::SameLine(120);
+    ImGui::SameLine(120 * s);
     int bg = static_cast<int>(ctx.program.seq[curIdx].background);
     const char *bgNames[] = {"No noise", "Pink noise", "White noise"};
     if (ImGui::Combo("Background", &bg, bgNames, 3)) {
@@ -349,10 +365,10 @@ void renderControls(AppContext &ctx) {
       ImGui::Spacing();
       ImGui::AlignTextToFramePadding();
       ImGui::Text("Noise");
-      ImGui::SameLine(70);
-      float noiseW = ImGui::GetContentRegionAvail().x - 20.f;
-      if (noiseW < 80.f)
-        noiseW = 80.f;
+      ImGui::SameLine(70 * s);
+      float noiseW = ImGui::GetContentRegionAvail().x - 20.f * s;
+      if (noiseW < 80.f * s)
+        noiseW = 80.f * s;
       ImGui::PushID("NoiseVol");
       ImGui::SetNextItemWidth(noiseW);
       if (ImGui::SliderFloat("##noise",
@@ -369,9 +385,9 @@ void renderControls(AppContext &ctx) {
 
   ImGui::AlignTextToFramePadding();
   ImGui::Text("Volume");
-  ImGui::SameLine(70);
-  const float btnW = ctx.playing ? 60.f : 40.f;
-  const float reserve = btnW + 40.f;
+  ImGui::SameLine(70 * s);
+  const float btnW = (ctx.playing ? 60.f : 40.f) * s;
+  const float reserve = btnW + 40.f * s;
   float volW = ImGui::GetContentRegionAvail().x - reserve;
   if (volW < 0)
     volW = 0;
@@ -381,7 +397,7 @@ void renderControls(AppContext &ctx) {
   }
   ImGui::SameLine();
   const char *playLabel = ctx.playing ? "Stop" : "\u25B6";
-  if (ImGui::Button(playLabel, ImVec2(btnW, 32))) {
+  if (ImGui::Button(playLabel, ImVec2(btnW, 32 * s))) {
     ctx.playing = !ctx.playing;
     if (ctx.playing) {
       ctx.driver->start(
@@ -401,12 +417,25 @@ void renderControls(AppContext &ctx) {
               ctx.manualElapsedSec += delta;
           });
     } else {
+      const bool wasAiDriven = ctx.paramController.isAiDriven();
+      if (wasAiDriven) {
+        ctx.beatFreq = ctx.paramController.currentBeatFreq();
+        int idx = ctx.synth.currentPeriodIndex();
+        if (!ctx.program.seq.empty() &&
+            idx < static_cast<int>(ctx.program.seq.size()) &&
+            !ctx.program.seq[idx].voices.empty()) {
+          ctx.program.seq[idx].voices[0].freqStart = ctx.beatFreq;
+          ctx.program.seq[idx].voices[0].freqEnd = ctx.beatFreq;
+          ctx.synth.setProgram(ctx.program);
+        }
+        ctx.manualElapsedSec = 0.f;
+      }
       ctx.paramController.clearAiState();
       ctx.driver->stop();
     }
   }
   ImGui::SameLine();
-  ImGui::Dummy(ImVec2(12, 0));
+  ImGui::Dummy(ImVec2(12 * s, 0));
 
   ImGui::EndChild();
 }

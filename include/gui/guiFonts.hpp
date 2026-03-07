@@ -2,6 +2,6 @@
 
 namespace gui {
 
-void loadFontsFromDir();
+void loadFontsFromDir(float dpiScale = 1.f);
 
 } // namespace gui

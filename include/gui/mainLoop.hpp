@@ -13,6 +13,5 @@ struct RenderFrameData {
 };
 
 void doOneRenderFrame(RenderFrameData &data);
-void installDragRenderSubclass(GLFWwindow *window, const RenderFrameData &data);
 
 } // namespace gui

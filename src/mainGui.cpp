@@ -1,3 +1,7 @@
+#include <GLFW/glfw3.h>
+
+#include <memory>
+
 #include "binaural/audioDriver.hpp"
 #include "binaural/parameterController.hpp"
 #include "binaural/period.hpp"
@@ -6,13 +10,16 @@
 #include "binaural/waveformBuffer.hpp"
 #include "gui/guiFonts.hpp"
 #include "gui/guiPanels.hpp"
-#include "gui/mainLoop.hpp"
 #include "gui/guiUtils.hpp"
+#include "gui/mainLoop.hpp"
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
-#include <GLFW/glfw3.h>
-#include <memory>
+
+
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 using namespace binaural;
 
@@ -74,6 +81,18 @@ int main() {
   }
   ctx.driver = driver.get();
 
+#ifdef _WIN32
+  // DPI awareness before glfwInit for correct window size on high-DPI displays
+  if (HMODULE user32 = GetModuleHandleW(L"user32.dll")) {
+    using SetDpiCtxFn = BOOL(WINAPI *)(void *);
+    auto setDpi = reinterpret_cast<SetDpiCtxFn>(
+        GetProcAddress(user32, "SetProcessDpiAwarenessContext"));
+    if (setDpi)
+      setDpi(reinterpret_cast<void *>(
+          -4));  // DPI_AWARENESS_CONTEXT_PER_MONITOR_V2
+  }
+#endif
+
   if (!glfwInit()) {
     return 1;
   }
@@ -81,6 +100,9 @@ int main() {
   glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
   glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
   glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+  // TODO: Re-enable when resize scaling is fixed. Win32 modal resize blocks
+  // main loop, causing stale DisplaySize.
+  glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 
   GLFWwindow *window = glfwCreateWindow(gui::WIDTH, gui::HEIGHT,
                                         "Binaural Beats", nullptr, nullptr);
@@ -96,15 +118,22 @@ int main() {
   ImGuiIO &io = ImGui::GetIO();
   io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 
+  float dpiScale = 1.f;
+#if GLFW_VERSION_MAJOR >= 3 && GLFW_VERSION_MINOR >= 3
+  float sx, sy;
+  glfwGetWindowContentScale(window, &sx, &sy);
+  dpiScale = (sx > sy) ? sx : sy;
+  if (dpiScale < 0.5f)
+    dpiScale = 1.f;
+#endif
   io.Fonts->Clear();
-  gui::loadFontsFromDir();
+  gui::loadFontsFromDir(dpiScale);
   gui::applyDarkTheme();
 
   ImGui_ImplGlfw_InitForOpenGL(window, true);
   ImGui_ImplOpenGL3_Init("#version 330");
 
   gui::RenderFrameData frameData{&ctx, window, &paramController, driver.get()};
-  gui::installDragRenderSubclass(window, frameData);
 
   while (!glfwWindowShouldClose(window)) {
     glfwPollEvents();

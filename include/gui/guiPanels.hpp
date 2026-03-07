@@ -35,6 +35,9 @@ struct AppContext {
   float timedPlaybackDurationSec = 600.f;
   bool showTimedPlaybackModal = false;
   bool modalOpen = false;
+
+  // DPI scaling (set each frame in mainLoop)
+  float uiScale = 1.f;
 };
 
 void renderTitleBar(AppContext &ctx);

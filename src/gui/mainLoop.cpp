@@ -1,17 +1,13 @@
 #include "gui/mainLoop.hpp"
 #include "gui/guiPanels.hpp"
+#include "gui/guiUtils.hpp"
 #include "binaural/parameterController.hpp"
 #include "binaural/audioDriver.hpp"
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
 #include <GLFW/glfw3.h>
-
-#ifdef _WIN32
-#define GLFW_EXPOSE_NATIVE_WIN32
-#include <GLFW/glfw3native.h>
-#include <windows.h>
-#endif
+#include <algorithm>
 
 namespace gui {
 
@@ -21,13 +17,35 @@ void doOneRenderFrame(RenderFrameData &data) {
   AppContext &ctx = *data.ctx;
   ImGui_ImplOpenGL3_NewFrame();
   ImGui_ImplGlfw_NewFrame();
+
+  // DPI: backend sets DisplaySize/DisplayFramebufferScale from GLFW. Apply content scale for Windows 125% etc.
+  ImGuiIO &io = ImGui::GetIO();
+  float displayW = (std::max)(1.f, io.DisplaySize.x);
+  float displayH = (std::max)(1.f, io.DisplaySize.y);
+
+  float contentScale = 1.f;
+#if GLFW_VERSION_MAJOR >= 3 && GLFW_VERSION_MINOR >= 3
+  float scaleX, scaleY;
+  glfwGetWindowContentScale(data.window, &scaleX, &scaleY);
+  contentScale = (std::max)(scaleX, scaleY);
+  if (contentScale < 0.5f)
+    contentScale = 1.f;
+#endif
+
   ImGui::NewFrame();
 
-  int winW, winH;
-  glfwGetFramebufferSize(data.window, &winW, &winH);
-  ImGui::SetNextWindowPos(ImVec2(0, 0));
-  ImGui::SetNextWindowSize(
-      ImVec2(static_cast<float>(winW), static_cast<float>(winH)));
+  ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Always);
+  ImGui::SetNextWindowSize(ImVec2(displayW, displayH), ImGuiCond_Always);
+  float uiScale = std::min(displayW / REF_WIDTH, displayH / REF_HEIGHT);
+  uiScale = std::clamp(uiScale, 0.5f, 1.5f);
+  // Dampen contentScale to avoid oversized UI (125%->1.06, 150%->1.12)
+  float dampedContent = (contentScale > 1.f)
+                           ? (1.f + (contentScale - 1.f) * 0.25f)
+                           : contentScale;
+  float effectiveScale = dampedContent * uiScale;
+  ctx.uiScale = effectiveScale;
+  ImGui::GetIO().FontGlobalScale = uiScale;
+  applyScaledStyle(effectiveScale);
 
   ctx.modalOpen = false;
   if (ctx.showLoadModal) {
@@ -65,50 +83,13 @@ void doOneRenderFrame(RenderFrameData &data) {
   }
 
   ImGui::Render();
-  int displayW, displayH;
-  glfwGetFramebufferSize(data.window, &displayW, &displayH);
-  glViewport(0, 0, displayW, displayH);
+  int fbW, fbH;
+  glfwGetFramebufferSize(data.window, &fbW, &fbH);
+  glViewport(0, 0, fbW, fbH);
   glClearColor(0.12f, 0.12f, 0.14f, 1.f);
   glClear(GL_COLOR_BUFFER_BIT);
   ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
   glfwSwapBuffers(data.window);
 }
-
-#ifdef _WIN32
-namespace {
-constexpr UINT_PTR DRAG_RENDER_TIMER_ID = 1;
-constexpr UINT DRAG_RENDER_TIMER_MS = 16;
-
-static RenderFrameData g_renderData;
-static WNDPROC g_originalWndProc = nullptr;
-
-LRESULT CALLBACK subclassedWndProc(HWND hwnd, UINT msg, WPARAM wp,
-                                   LPARAM lp) {
-  if (msg == WM_ENTERSIZEMOVE) {
-    SetTimer(hwnd, DRAG_RENDER_TIMER_ID, DRAG_RENDER_TIMER_MS, nullptr);
-  } else if (msg == WM_EXITSIZEMOVE) {
-    KillTimer(hwnd, DRAG_RENDER_TIMER_ID);
-  } else if (msg == WM_TIMER && wp == DRAG_RENDER_TIMER_ID) {
-    if (!glfwWindowShouldClose(g_renderData.window))
-      doOneRenderFrame(g_renderData);
-    return 0;
-  }
-  return CallWindowProcW(g_originalWndProc, hwnd, msg, wp, lp);
-}
-} // namespace
-
-void installDragRenderSubclass(GLFWwindow *window,
-                               const RenderFrameData &data) {
-  g_renderData = data;
-  HWND hwnd = glfwGetWin32Window(window);
-  if (!hwnd)
-    return;
-  g_originalWndProc = reinterpret_cast<WNDPROC>(
-      SetWindowLongPtrW(hwnd, GWLP_WNDPROC,
-                       reinterpret_cast<LONG_PTR>(subclassedWndProc)));
-}
-#else
-void installDragRenderSubclass(GLFWwindow *, const RenderFrameData &) {}
-#endif
 
 } // namespace gui
