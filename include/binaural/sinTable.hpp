@@ -7,7 +7,7 @@ namespace binaural {
 /// 正弦查找表，整数索引对应 [0, 2π)
 class SinTable {
 public:
-    explicit SinTable(int size = 1440);
+    explicit SinTable(int size = 4096);
 
     float sinFastInt(int angle) const;
     float cosFastInt(int angle) const;

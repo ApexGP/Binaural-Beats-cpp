@@ -12,7 +12,11 @@ constexpr float BEAT_FREQ_MAX = 40.f;
 
 ParameterController::ParameterController(Synthesizer &synth,
                                          PredictionQueue &queue)
-    : synth_(&synth), queue_(&queue) {}
+    : synth_(&synth), queue_(&queue) {
+  // 缓存 dt，bufferFrames/sampleRate 在运行期不变
+  const auto &cfg = synth.config();
+  dt_ = static_cast<float>(cfg.bufferFrames) / static_cast<float>(cfg.sampleRate);
+}
 
 void ParameterController::update(float periodElapsedSec) {
   if (clearRequested_.exchange(false, std::memory_order_acq_rel)) {
@@ -37,11 +41,9 @@ void ParameterController::update(float periodElapsedSec) {
       currentTargetHz_.store(synth_->currentPeriod()->voices[0].freqStart,
                              std::memory_order_relaxed);
     }
-    const auto &cfg = synth_->config();
-    float dt = static_cast<float>(cfg.bufferFrames) / cfg.sampleRate;
     float cur = currentTargetHz_.load(std::memory_order_relaxed);
     float diff = target - cur;
-    float maxStep = rampRate_ * dt;
+    float maxStep = rampRate_ * dt_;  // 使用预缓存的 dt_
     float next;
     if (std::abs(diff) <= maxStep) {
       next = target;
@@ -53,8 +55,9 @@ void ParameterController::update(float periodElapsedSec) {
 
     if (const Period *period = synth_->currentPeriod()) {
       size_t n = period->voices.size();
-      std::vector<float> freqs(n, currentTargetHz_.load(std::memory_order_relaxed));
-      synth_->setFreqs(freqs);
+      // 复用 freqsBuf_，消除每 buffer 的 vector 堆分配
+      freqsBuf_.assign(n, currentTargetHz_.load(std::memory_order_relaxed));
+      synth_->setFreqs(freqsBuf_);
     }
   } else {
     aiDriven_.store(false, std::memory_order_release);

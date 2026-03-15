@@ -30,11 +30,11 @@ float SinTable::cosFastInt(int angle) const {
 }
 
 float SinTable::sinFastFloat(float phase) const {
-    phase -= std::floor(phase);
-    const float scaled = phase * static_cast<float>(size_);
-    const int i0 = static_cast<int>(scaled) % size_;
-    const int i1 = (i0 + 1) % size_;
-    const float frac = scaled - std::floor(scaled);
+    phase -= std::floor(phase);                          // 归一化到 [0,1)
+    const float scaled = phase * static_cast<float>(size_); // [0, size_)
+    const int i0 = static_cast<int>(scaled);             // floor，scaled < size_ 恒成立
+    const int i1 = (i0 + 1 < size_) ? (i0 + 1) : 0;    // 环绕，无取模
+    const float frac = scaled - static_cast<float>(i0); // 无第二次 std::floor
     return tableSin_[i0] * (1.f - frac) + tableSin_[i1] * frac;
 }
 

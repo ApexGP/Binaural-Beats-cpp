@@ -45,6 +45,8 @@ private:
   std::atomic<bool> clearRequested_{false};
   float rampRate_ = 2.0f;
   std::optional<EEGStatePrediction> lastPrediction_;
+  std::vector<float> freqsBuf_;  // 复用 vector，消除 AI 模式每 buffer 堆分配
+  float dt_ = 0.f;               // 缓存 bufferFrames/sampleRate，避免逐帧重算
 };
 
 } // namespace binaural

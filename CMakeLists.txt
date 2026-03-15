@@ -23,6 +23,7 @@ endif()
 add_library(BinauralSrc
     src/gnauralParser.cpp
     src/pinkNoise.cpp
+    src/sinTable.cpp
     src/synthesizer.cpp
     src/stubPredictor.cpp
     src/parameterController.cpp

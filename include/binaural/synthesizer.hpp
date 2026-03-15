@@ -2,6 +2,7 @@
 
 #include "period.hpp"
 #include "pinkNoise.hpp"
+#include "sinTable.hpp"
 #include <atomic>
 #include <cstdint>
 #include <mutex>
@@ -82,6 +83,11 @@ private:
     // ── 显示用原子（音频写，GUI 读）────────────────────────────────────────
     std::atomic<int>   currentPeriodIndex_{0};
     std::atomic<float> periodElapsedSec_{0.f};
+
+    // ── 性能优化成员 ──────────────────────────────────────────────────────
+    SinTable           sinTable_;           // 快速正弦查找表（4096 项线性插值）
+    std::vector<float> mixBuf_;             // 预分配混音缓冲，避免音频回调 malloc
+    int                lastEnsuredPidx_{-1}; // ensureStateSize 缓存，跳过逐帧重复检查
 };
 
 }  // namespace binaural

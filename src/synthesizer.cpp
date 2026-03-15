@@ -23,7 +23,8 @@ float getPitchFreq(int noteK, int octave) {
 }
 }  // namespace
 
-Synthesizer::Synthesizer(const SynthesizerConfig& config) : config_(config) {}
+Synthesizer::Synthesizer(const SynthesizerConfig& config)
+    : config_(config), mixBuf_(config.bufferFrames * 2, 0.f) {}
 
 // ── Thread-safe setters ──────────────────────────────────────────────────────
 
@@ -112,6 +113,7 @@ void Synthesizer::applyPendingUpdates() {
         vols_.clear();
         pitchs_.clear();
         isochronic_.clear();
+        lastEnsuredPidx_ = -1;  // O5: 强制下次 ensureStateSize 重新初始化
 
         if (!sameStructure) {
             // 结构变化：重置全部音频状态（包括相位和进度）
@@ -182,7 +184,7 @@ void Synthesizer::fillSamples(std::vector<int16_t>& outSamples) {
         }
     }
 
-    std::vector<float> ws(numFrames * 2, 0.f);
+    std::fill(mixBuf_.begin(), mixBuf_.end(), 0.f);  // 复用预分配 buffer
 
     const float phaseStepScale = 1.0f / sampleRate;
     for (int j = 0; j < numVoices; ++j) {
@@ -195,39 +197,43 @@ void Synthesizer::fillSamples(std::vector<int16_t>& outSamples) {
         float phaseIso = phasesIso_[j];
 
         if (isochronic_[j]) {
+            // isochronic 两声道相同，phaseR 与 phaseL 等价，去掉独立跟踪
             const float incCarrier = baseFreq * phaseStepScale;
             const float incIso = beatFreq * phaseStepScale;
             for (int i = 0; i < numFrames * 2; i += 2) {
                 float gain = 0.f;
                 if (phaseIso < 0.5f) {
-                    gain = std::cos(phaseIso * 3.14159265f);
+                    // cos(phaseIso*π) = sin(2π*(phaseIso/2 + 0.25))
+                    gain = sinTable_.sinFastFloat(phaseIso * 0.5f + 0.25f);
                 }
-                const float s = std::sin(TWO_PI * phaseL) * vol * gain;
-                ws[i] += s;
-                ws[i + 1] += s;
+                // std::sin(TWO_PI*phaseL) → sinTable_.sinFastFloat(phaseL)
+                const float s = sinTable_.sinFastFloat(phaseL) * vol * gain;
+                mixBuf_[i]     += s;
+                mixBuf_[i + 1] += s;
                 phaseL += incCarrier;
-                phaseR = phaseL;
                 if (phaseL >= 1.0f) phaseL -= 1.0f;
-                if (phaseR >= 1.0f) phaseR -= 1.0f;
                 phaseIso += incIso;
                 if (phaseIso >= 1.0f) phaseIso -= 1.0f;
-                if (phaseIso < 0.0f) phaseIso += 1.0f;
             }
+            phasesL_[j]   = phaseL;
+            phasesR_[j]   = phaseL;  // isochronic 下 R 始终与 L 同步
+            phasesIso_[j] = phaseIso;
         } else {
             const float incL = (baseFreq + beatFreq) * phaseStepScale;
             const float incR = baseFreq * phaseStepScale;
             for (int i = 0; i < numFrames * 2; i += 2) {
-                ws[i]     += std::sin(TWO_PI * phaseL) * vol;
-                ws[i + 1] += std::sin(TWO_PI * phaseR) * vol;
+                // std::sin(TWO_PI*phase) → sinTable_.sinFastFloat(phase)
+                mixBuf_[i]     += sinTable_.sinFastFloat(phaseL) * vol;
+                mixBuf_[i + 1] += sinTable_.sinFastFloat(phaseR) * vol;
                 phaseL += incL;
                 phaseR += incR;
                 if (phaseL >= 1.0f) phaseL -= 1.0f;
                 if (phaseR >= 1.0f) phaseR -= 1.0f;
             }
+            phasesL_[j]   = phaseL;
+            phasesR_[j]   = phaseR;
+            phasesIso_[j] = phaseIso;
         }
-        phasesL_[j]   = phaseL;
-        phasesR_[j]   = phaseR;
-        phasesIso_[j] = phaseIso;
     }
 
     const float multL = 1.0f - std::max(0.0f, balance_);
@@ -237,8 +243,8 @@ void Synthesizer::fillSamples(std::vector<int16_t>& outSamples) {
     const bool useWhite = (period.background == Period::Background::WhiteNoise);
 
     for (int i = 0; i < numFrames * 2; i += 2) {
-        float valL = ws[i]     * 32767.0f / numVoices * multL;
-        float valR = ws[i + 1] * 32767.0f / numVoices * multR;
+        float valL = mixBuf_[i]     * 32767.0f / numVoices * multL;
+        float valR = mixBuf_[i + 1] * 32767.0f / numVoices * multR;
         if (bgVol > 0.f) {
             if (usePink) {
                 const float p = pinkNoise_.tick();
@@ -309,6 +315,14 @@ void Synthesizer::ensureStateSize() {
     const Period& period = program_.seq[pidx];
     const size_t n = period.voices.size();
 
+    // 若 pidx 与上次相同且所有 vector 尺寸正确，直接跳过
+    if (pidx == lastEnsuredPidx_ &&
+        freqs_.size() == n && vols_.size() == n &&
+        pitchs_.size() == n && isochronic_.size() == n &&
+        phasesL_.size() == n) {
+        return;
+    }
+
     if (freqs_.size() != n) {
         freqs_.resize(n);
         for (size_t j = 0; j < n; ++j)
@@ -337,6 +351,12 @@ void Synthesizer::ensureStateSize() {
         phasesR_.resize(n, 0.f);
         phasesIso_.resize(n, 0.f);
     }
+
+    // 确保 mixBuf_ 尺寸正确（通常已在构造时分配，此处为保险）
+    if (mixBuf_.size() != static_cast<size_t>(config_.bufferFrames * 2))
+        mixBuf_.resize(config_.bufferFrames * 2, 0.f);
+
+    lastEnsuredPidx_ = pidx;  // 缓存当前 pidx，下次同 period 直接跳过
 }
 
 }  // namespace binaural
