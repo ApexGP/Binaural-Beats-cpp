@@ -7,8 +7,8 @@
 
 #include "gui/guiPanels.hpp"
 #include "gui/guiUtils.hpp"
+#include "gui/playbackController.hpp"
 #include "binaural/eegPredictorInterface.hpp"
-#include "binaural/gnauralParser.hpp"
 #include "binaural/period.hpp"
 #include "imgui.h"
 #include "imgui_internal.h"
@@ -45,7 +45,7 @@ void renderTitleBar(AppContext &ctx) {
   static bool modalWasOpen = false;
   if (ctx.modalOpen) {
     if (!modalWasOpen)
-      frozenManualElapsed = ctx.manualElapsedSec;
+      frozenManualElapsed = ctx.manualElapsedSec.load(std::memory_order_relaxed);
     modalWasOpen = true;
   } else {
     modalWasOpen = false;
@@ -60,7 +60,7 @@ void renderTitleBar(AppContext &ctx) {
     snprintf(tBuf, sizeof(tBuf), "%d", ctx.program.seq[idx].lengthSec);
   } else {
     const float elapsedForDisplay =
-        modalOpen ? frozenManualElapsed : ctx.manualElapsedSec;
+        modalOpen ? frozenManualElapsed : ctx.manualElapsedSec.load(std::memory_order_relaxed);
     snprintf(eBuf, sizeof(eBuf), "%d",
              static_cast<int>(elapsedForDisplay + 0.5f));
     if (ctx.timedPlaybackEnabled) {
@@ -120,44 +120,12 @@ void renderTitleBar(AppContext &ctx) {
     if (ctx.timedPlaybackEnabled && !ctx.loadedFromGnaural &&
         !ctx.paramController.isAiDriven()) {
       if (ImGui::MenuItem("Exit timed playback")) {
-        ctx.timedPlaybackEnabled = false;
-        ctx.manualElapsedSec = 0.f;
+        PlaybackController::exitTimedPlayback(ctx);
         ImGui::CloseCurrentPopup();
       }
     } else if (ctx.loadedFromGnaural || ctx.paramController.isAiDriven()) {
       if (ImGui::MenuItem("Return to manual control")) {
-        const bool wasAiDriven = ctx.paramController.isAiDriven();
-        if (wasAiDriven) {
-          ctx.beatFreq = ctx.paramController.currentBeatFreq();
-          int idx = ctx.synth.currentPeriodIndex();
-          if (!ctx.program.seq.empty() &&
-              idx < static_cast<int>(ctx.program.seq.size()) &&
-              !ctx.program.seq[idx].voices.empty()) {
-            ctx.program.seq[idx].voices[0].freqStart = ctx.beatFreq;
-            ctx.program.seq[idx].voices[0].freqEnd = ctx.beatFreq;
-            ctx.synth.setProgram(ctx.program);
-          }
-          ctx.paramController.clearAiState();
-        }
-        if (ctx.loadedFromGnaural && !wasAiDriven) {
-          ctx.program = binaural::Program{};
-          ctx.program.name = "Theta meditation";
-          ctx.program.seq.push_back({
-              .lengthSec = 3600,
-              .voices = {{.freqStart = 4.f,
-                          .freqEnd = 4.f,
-                          .volume = 0.7f,
-                          .pitch = 161.f,
-                          .isochronic = false}},
-              .background = binaural::Period::Background::None,
-              .backgroundVol = 0.f,
-          });
-          ctx.synth.setProgram(ctx.program);
-          ctx.loadedFromGnaural = false;
-          ctx.beatFreq = 4.f;
-          ctx.baseFreq = 161.f;
-        }
-        ctx.manualElapsedSec = 0.f;
+        PlaybackController::returnToManual(ctx);
         ImGui::CloseCurrentPopup();
       }
     } else {
@@ -273,7 +241,7 @@ void renderControls(AppContext &ctx) {
   if (sliderWithButtons("Binaural Beat", &ctx.beatFreq, BEAT_MIN, BEAT_MAX,
                         "%.3f Hz", 0.5f, buf, "%.3f", "Hz", s)) {
     if (!ctx.loadedFromGnaural)
-      ctx.manualElapsedSec = 0.f;
+      ctx.manualElapsedSec.store(0.f, std::memory_order_relaxed);
     if (!ctx.program.seq.empty() &&
         curIdx < static_cast<int>(ctx.program.seq.size()) &&
         !ctx.program.seq[curIdx].voices.empty()) {
@@ -321,7 +289,7 @@ void renderControls(AppContext &ctx) {
   if (sliderWithButtons("Base Frequency", &ctx.baseFreq, BASE_FREQ_MIN,
                         BASE_FREQ_MAX, "%.3f Hz", 5.f, buf, "%.3f", "Hz", s)) {
     if (!ctx.loadedFromGnaural)
-      ctx.manualElapsedSec = 0.f;
+      ctx.manualElapsedSec.store(0.f, std::memory_order_relaxed);
     if (!ctx.program.seq.empty() &&
         curIdx < static_cast<int>(ctx.program.seq.size()) &&
         !ctx.program.seq[curIdx].voices.empty()) {
@@ -335,7 +303,7 @@ void renderControls(AppContext &ctx) {
                         "%.3f", 0.1f, getBalanceLabel(ctx.balance), "%.3f",
                         "", s)) {
     if (!ctx.loadedFromGnaural)
-      ctx.manualElapsedSec = 0.f;
+      ctx.manualElapsedSec.store(0.f, std::memory_order_relaxed);
     ctx.synth.setBalance(ctx.balance);
   }
   ImGui::Spacing();
@@ -346,7 +314,7 @@ void renderControls(AppContext &ctx) {
     bool iso = ctx.program.seq[curIdx].voices[0].isochronic;
     if (ImGui::Checkbox("Isochronic", &iso)) {
       if (!ctx.loadedFromGnaural)
-        ctx.manualElapsedSec = 0.f;
+        ctx.manualElapsedSec.store(0.f, std::memory_order_relaxed);
       ctx.program.seq[curIdx].voices[0].isochronic = iso;
       ctx.synth.setProgram(ctx.program);
     }
@@ -355,7 +323,7 @@ void renderControls(AppContext &ctx) {
     const char *bgNames[] = {"No noise", "Pink noise", "White noise"};
     if (ImGui::Combo("Background", &bg, bgNames, 3)) {
       if (!ctx.loadedFromGnaural)
-        ctx.manualElapsedSec = 0.f;
+        ctx.manualElapsedSec.store(0.f, std::memory_order_relaxed);
       ctx.program.seq[curIdx].background =
           static_cast<binaural::Period::Background>(bg);
       ctx.synth.setProgram(ctx.program);
@@ -375,7 +343,7 @@ void renderControls(AppContext &ctx) {
                              &ctx.program.seq[curIdx].backgroundVol, 0.f, 1.f,
                              "%.2f")) {
         if (!ctx.loadedFromGnaural)
-          ctx.manualElapsedSec = 0.f;
+          ctx.manualElapsedSec.store(0.f, std::memory_order_relaxed);
         ctx.synth.setProgram(ctx.program);
       }
       ImGui::PopID();
@@ -398,40 +366,10 @@ void renderControls(AppContext &ctx) {
   ImGui::SameLine();
   const char *playLabel = ctx.playing ? "Stop" : "\u25B6";
   if (ImGui::Button(playLabel, ImVec2(btnW, 32 * s))) {
-    ctx.playing = !ctx.playing;
-    if (ctx.playing) {
-      ctx.driver->start(
-          ctx.config.sampleRate, ctx.config.bufferFrames,
-          [&ctx](std::vector<int16_t> &buf) {
-            float delta = static_cast<float>(ctx.config.bufferFrames) /
-                          ctx.config.sampleRate;
-            ctx.paramController.update(ctx.synth.periodElapsedSec());
-            ctx.synth.fillSamples(buf);
-            for (size_t i = 0; i < buf.size(); i += 8) {
-              float l = buf[i] / 32768.f;
-              float r = buf[i + 1] / 32768.f;
-              ctx.waveBuf.push(l, r);
-            }
-            ctx.synth.advanceTime(delta);
-            if (!ctx.loadedFromGnaural)
-              ctx.manualElapsedSec += delta;
-          });
+    if (!ctx.playing) {
+      PlaybackController::start(ctx);
     } else {
-      const bool wasAiDriven = ctx.paramController.isAiDriven();
-      if (wasAiDriven) {
-        ctx.beatFreq = ctx.paramController.currentBeatFreq();
-        int idx = ctx.synth.currentPeriodIndex();
-        if (!ctx.program.seq.empty() &&
-            idx < static_cast<int>(ctx.program.seq.size()) &&
-            !ctx.program.seq[idx].voices.empty()) {
-          ctx.program.seq[idx].voices[0].freqStart = ctx.beatFreq;
-          ctx.program.seq[idx].voices[0].freqEnd = ctx.beatFreq;
-          ctx.synth.setProgram(ctx.program);
-        }
-        ctx.manualElapsedSec = 0.f;
-      }
-      ctx.paramController.clearAiState();
-      ctx.driver->stop();
+      PlaybackController::stop(ctx);
     }
   }
   ImGui::SameLine();
@@ -445,8 +383,9 @@ void renderHelpCenter(AppContext &ctx) {
     return;
   ImGui::SetNextWindowSize(ImVec2(480, 420), ImGuiCond_FirstUseEver);
   ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 12.f);
-  if (ImGui::Begin("Help Center", &ctx.showHelpCenter,
-                   ImGuiWindowFlags_NoCollapse)) {
+  bool visible = ImGui::Begin("Help Center", &ctx.showHelpCenter,
+                   ImGuiWindowFlags_NoCollapse);
+  if (visible) {
     if (ImGui::BeginChild("HelpContent", ImVec2(0, -30),
                           ImGuiChildFlags_Border)) {
       ImGui::TextColored(ImVec4(0.4f, 0.7f, 1.f, 1.f), "Parameters");
@@ -492,8 +431,8 @@ void renderHelpCenter(AppContext &ctx) {
     }
     if (ImGui::Button("Close", ImVec2(80, 0)))
       ctx.showHelpCenter = false;
-    ImGui::End();
   }
+  ImGui::End();
   ImGui::PopStyleVar();
 }
 
@@ -521,26 +460,22 @@ void renderLoadModal(AppContext &ctx) {
       ofn.nMaxFile = 512;
       ofn.Flags = OFN_FILEMUSTEXIST;
       if (GetOpenFileNameW(&ofn)) {
-        char pathA[512];
-        WideCharToMultiByte(CP_UTF8, 0, pathW, -1, pathA, 512, 0, 0);
-        strncpy(ctx.loadPathBuf, pathA, sizeof(ctx.loadPathBuf) - 1);
-        ctx.loadPathBuf[sizeof(ctx.loadPathBuf) - 1] = '\0';
+        // 先查询所需缓冲大小，再动态分配（L3 修复：避免路径截断）
+        int needed = WideCharToMultiByte(CP_UTF8, 0, pathW, -1,
+                                         nullptr, 0, nullptr, nullptr);
+        if (needed > 0) {
+          std::vector<char> pathA(static_cast<size_t>(needed));
+          WideCharToMultiByte(CP_UTF8, 0, pathW, -1,
+                              pathA.data(), needed, nullptr, nullptr);
+          strncpy(ctx.loadPathBuf, pathA.data(), sizeof(ctx.loadPathBuf) - 1);
+          ctx.loadPathBuf[sizeof(ctx.loadPathBuf) - 1] = '\0';
+        }
       }
     }
     ImGui::SameLine();
 #endif
     if (ImGui::Button("Load")) {
-      if (auto prog = binaural::parseGnaural(ctx.loadPathBuf)) {
-        ctx.program = std::move(*prog);
-        ctx.synth.setProgram(ctx.program);
-        ctx.loadedFromGnaural = true;
-        if (!ctx.program.seq.empty() &&
-            !ctx.program.seq[0].voices.empty()) {
-          ctx.beatFreq = ctx.program.seq[0].voices[0].freqStart;
-          ctx.baseFreq = ctx.program.seq[0].voices[0].pitch > 0
-                             ? ctx.program.seq[0].voices[0].pitch
-                             : 161.f;
-        }
+      if (PlaybackController::loadGnaural(ctx)) {
         ImGui::CloseCurrentPopup();
       }
     }
@@ -572,7 +507,7 @@ void renderTimedPlaybackModal(AppContext &ctx) {
     ImGui::Spacing();
     if (ImGui::Button("OK", ImVec2(80, 0))) {
       ctx.timedPlaybackEnabled = true;
-      ctx.manualElapsedSec = 0.f;
+      ctx.manualElapsedSec.store(0.f, std::memory_order_relaxed);
       ImGui::CloseCurrentPopup();
     }
     ImGui::SameLine();

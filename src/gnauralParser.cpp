@@ -13,10 +13,35 @@ namespace binaural {
 
 namespace {
 
+/// 安全的 stof：失败返回 defaultVal
+float safeStof(const std::string& s, float defaultVal = 0.f) {
+    try {
+        return std::stof(s);
+    } catch (...) {
+        return defaultVal;
+    }
+}
+
+/// 安全的 stoi：失败返回 defaultVal
+int safeStoi(const std::string& s, int defaultVal = 0) {
+    try {
+        return std::stoi(s);
+    } catch (...) {
+        return defaultVal;
+    }
+}
+
+/// 从 line 中提取 "[TAG=VALUE]" 格式的值；失败返回 defaultVal
+float extractBracketFloat(const std::string& line, size_t tagLen, float defaultVal) {
+    size_t closePos = line.find(']');
+    if (closePos == std::string::npos || closePos <= tagLen) return defaultVal;
+    return safeStof(line.substr(tagLen, closePos - tagLen), defaultVal);
+}
+
 bool parseTxtFormat(std::istream& in, Program& out) {
     float baseFreq = 200.f;
     float noiseVol = 0.f;
-    float toneVol = 70.f;
+    float toneVol  = 1.0f;   // M5 修复：初始值为 1.0（100%），而非 70.f
     std::vector<std::tuple<float, float, int>> entries;
 
     std::string line;
@@ -26,15 +51,15 @@ bool parseTxtFormat(std::istream& in, Program& out) {
         if (line.empty() || line[0] == '#') continue;
 
         if (line.find("[BASEFREQ=") == 0) {
-            baseFreq = std::stof(line.substr(10, line.find(']') - 10));
+            baseFreq = extractBracketFloat(line, 10, baseFreq);
             continue;
         }
         if (line.find("[NOISEVOL=") == 0) {
-            noiseVol = std::stof(line.substr(10, line.find(']') - 10)) / 100.f;
+            noiseVol = extractBracketFloat(line, 10, noiseVol * 100.f) / 100.f;
             continue;
         }
         if (line.find("[TONEVOL=") == 0) {
-            toneVol = std::stof(line.substr(9, line.find(']') - 9)) / 100.f;
+            toneVol = extractBracketFloat(line, 9, toneVol * 100.f) / 100.f;
             continue;
         }
         if (line.find('[') == 0) continue;
@@ -51,7 +76,6 @@ bool parseTxtFormat(std::istream& in, Program& out) {
 
     out.name = "Gnaural";
     out.seq.clear();
-    const float beatScale = toneVol;
     const bool hasNoise = (noiseVol > 0.001f);
 
     for (const auto& [fL, fR, sec] : entries) {
@@ -60,12 +84,12 @@ bool parseTxtFormat(std::istream& in, Program& out) {
         p.lengthSec = sec;
         p.voices.push_back({
             .freqStart = beatFreq,
-            .freqEnd = beatFreq,
-            .volume = beatScale,
-            .pitch = baseFreq,
+            .freqEnd   = beatFreq,
+            .volume    = toneVol,
+            .pitch     = baseFreq,
             .isochronic = false,
         });
-        p.background = hasNoise ? Period::Background::PinkNoise : Period::Background::None;
+        p.background    = hasNoise ? Period::Background::PinkNoise : Period::Background::None;
         p.backgroundVol = noiseVol;
         out.seq.push_back(std::move(p));
     }
@@ -75,10 +99,11 @@ bool parseTxtFormat(std::istream& in, Program& out) {
 bool parseXmlFormat(const std::string& content, Program& out) {
     std::vector<float> beatFreqs;
     std::vector<float> baseFreqs;
-    std::vector<int> durations;
+    std::vector<int>   durations;
     std::vector<float> volL, volR;
     float noiseVol = 0.f;
 
+    // 三套正则以兼容不同属性顺序的 gnaural XML
     std::regex entryRe("<entry[^>]*duration=\"([0-9.]+)\"[^>]*beatfreq=\"([0-9.]+)\"[^>]*basefreq=\"([0-9.]+)\"[^>]*volume_left=\"([0-9.]+)\"[^>]*volume_right=\"([0-9.]+)\"[^>]*state=\"([0-9]+)\"");
     std::regex entryRe2("<entry[^>]*beatfreq=\"([0-9.]+)\"[^>]*basefreq=\"([0-9.]+)\"[^>]*duration=\"([0-9.]+)\"[^>]*");
     std::regex entryRe3("<entry[^>]*parent=\"[^\"]*\"[^>]*duration=\"([0-9.]+)\"[^>]*volume_left=\"([0-9.]+)\"[^>]*volume_right=\"([0-9.]+)\"[^>]*beatfreq=\"([0-9.]+)\"[^>]*basefreq=\"([0-9.]+)\"[^>]*state=\"([0-9]+)\"");
@@ -98,36 +123,28 @@ bool parseXmlFormat(const std::string& content, Program& out) {
 
     std::smatch m;
     std::string s = content;
+
+    // 正则匹配中的数值转换均通过 safeStof/safeStoi 保护
     while (std::regex_search(s, m, entryRe)) {
-        float dur = std::stof(m[1].str());
-        float beat = std::stof(m[2].str());
-        float base = std::stof(m[3].str());
-        float vl = std::stof(m[4].str());
-        float vr = std::stof(m[5].str());
-        int state = std::stoi(m[6].str());
-        addEntry(dur, beat, base, vl, vr, state);
+        addEntry(safeStof(m[1].str()), safeStof(m[2].str()),
+                 safeStof(m[3].str()), safeStof(m[4].str()),
+                 safeStof(m[5].str()), safeStoi(m[6].str(), 1));
         s = m.suffix();
     }
     if (beatFreqs.empty()) {
         s = content;
         while (std::regex_search(s, m, entryRe3)) {
-            float dur = std::stof(m[1].str());
-            float vl = std::stof(m[2].str());
-            float vr = std::stof(m[3].str());
-            float beat = std::stof(m[4].str());
-            float base = std::stof(m[5].str());
-            int state = std::stoi(m[6].str());
-            addEntry(dur, beat, base, vl, vr, state);
+            addEntry(safeStof(m[1].str()), safeStof(m[4].str()),
+                     safeStof(m[5].str()), safeStof(m[2].str()),
+                     safeStof(m[3].str()), safeStoi(m[6].str(), 1));
             s = m.suffix();
         }
     }
     if (beatFreqs.empty()) {
         s = content;
         while (std::regex_search(s, m, entryRe2)) {
-            float beat = std::stof(m[1].str());
-            float base = std::stof(m[2].str());
-            float dur = std::stof(m[3].str());
-            addEntry(dur, beat, base, 0.85f, 0.85f, 1);
+            addEntry(safeStof(m[3].str()), safeStof(m[1].str()),
+                     safeStof(m[2].str()), 0.85f, 0.85f, 1);
             s = m.suffix();
         }
     }
@@ -136,7 +153,7 @@ bool parseXmlFormat(const std::string& content, Program& out) {
 
     s = content;
     if (std::regex_search(s, m, noiseRe)) {
-        noiseVol = std::stof(m[1].str()) / 100.f;
+        noiseVol = safeStof(m[1].str()) / 100.f;
     }
 
     out.name = "Gnaural";
@@ -144,21 +161,22 @@ bool parseXmlFormat(const std::string& content, Program& out) {
     for (size_t i = 0; i < beatFreqs.size(); ++i) {
         Period p;
         p.lengthSec = durations[i];
-        const float vol = (i < volL.size()) ? (volL[i] + volR[i]) * 0.5f : 0.85f;
+        const float vol  = (i < volL.size()) ? (volL[i] + volR[i]) * 0.5f : 0.85f;
         const float beat = beatFreqs[i];
-        const bool isPinkNoiseOnly = (beat < 0.001f);
+        const bool  isPinkNoiseOnly = (beat < 0.001f);
         p.voices.push_back({
-            .freqStart = beat,
-            .freqEnd = beat,
-            .volume = isPinkNoiseOnly ? 0.f : vol,
-            .pitch = (i < baseFreqs.size()) ? baseFreqs[i] : 200.f,
+            .freqStart  = beat,
+            .freqEnd    = beat,
+            .volume     = isPinkNoiseOnly ? 0.f : vol,
+            .pitch      = (i < baseFreqs.size()) ? baseFreqs[i] : 200.f,
             .isochronic = false,
         });
         if (isPinkNoiseOnly) {
-            p.background = Period::Background::PinkNoise;
+            p.background    = Period::Background::PinkNoise;
             p.backgroundVol = vol;
         } else {
-            p.background = (noiseVol > 0.001f) ? Period::Background::PinkNoise : Period::Background::None;
+            p.background    = (noiseVol > 0.001f) ? Period::Background::PinkNoise
+                                                   : Period::Background::None;
             p.backgroundVol = noiseVol;
         }
         out.seq.push_back(std::move(p));
@@ -171,9 +189,9 @@ bool parseXmlFormat(const std::string& content, Program& out) {
 std::optional<Program> parseGnauralFromString(const std::string& content,
                                               const std::string& pathHint) {
     Program out;
-    if (content.find("<?xml") != std::string::npos ||
+    if (content.find("<?xml")    != std::string::npos ||
         content.find("<gnaural") != std::string::npos ||
-        content.find("<entry") != std::string::npos) {
+        content.find("<entry")   != std::string::npos) {
         if (parseXmlFormat(content, out)) return out;
     }
     std::istringstream iss(content);

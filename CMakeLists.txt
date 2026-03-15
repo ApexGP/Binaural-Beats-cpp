@@ -49,6 +49,7 @@ if(portaudio_FOUND)
             src/gui/guiFonts.cpp
             src/gui/guiPanels.cpp
             src/gui/mainLoop.cpp
+            src/gui/playbackController.cpp
         )
         target_include_directories(BinauralBeatsGui PRIVATE
             ${CMAKE_CURRENT_SOURCE_DIR}/include

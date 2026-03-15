@@ -1,5 +1,5 @@
 #include "binaural/wavDriver.hpp"
-#include <fstream>
+#include <cstdio>
 #include <vector>
 
 namespace binaural {
@@ -17,44 +17,64 @@ void WavFileDriver::stop() { running_ = false; }
 
 bool WavFileDriver::isRunning() const { return running_; }
 
-void WavFileDriver::writeToFile(const std::string& path, float durationSec) {
-    std::ofstream f(path, std::ios::binary);
-    if (!f) return;
+bool WavFileDriver::writeToFile(const std::string& path, float durationSec) {
+    FILE* fp = std::fopen(path.c_str(), "wb");
+    if (!fp) return false;
 
-    std::vector<int16_t> buf(bufferFrames_ * 2);
     const int totalFrames = static_cast<int>(durationSec * sampleRate_);
-    const int numChunks = (totalFrames + bufferFrames_ - 1) / bufferFrames_;
+    const int numChunks   = (totalFrames + bufferFrames_ - 1) / bufferFrames_;
 
-    std::vector<int16_t> allSamples;
-    allSamples.reserve(totalFrames * 2);
+    // WAV header（44 字节），size 字段先写 0，后填
+    // RIFF chunk
+    std::fwrite("RIFF", 1, 4, fp);
+    uint32_t fileSizePlaceholder = 0;
+    std::fwrite(&fileSizePlaceholder, 4, 1, fp);   // offset 4
+    std::fwrite("WAVE", 1, 4, fp);
+    // fmt sub-chunk
+    std::fwrite("fmt ", 1, 4, fp);
+    const uint32_t fmtLen   = 16;
+    std::fwrite(&fmtLen, 4, 1, fp);
+    const uint16_t audioFmt = 1;   // PCM
+    std::fwrite(&audioFmt, 2, 1, fp);
+    const uint16_t channels = 2;
+    std::fwrite(&channels, 2, 1, fp);
+    const uint32_t sr = static_cast<uint32_t>(sampleRate_);
+    std::fwrite(&sr, 4, 1, fp);
+    const uint32_t byteRate = sr * 4u;
+    std::fwrite(&byteRate, 4, 1, fp);
+    const uint16_t blockAlign   = 4;
+    std::fwrite(&blockAlign, 2, 1, fp);
+    const uint16_t bitsPerSample = 16;
+    std::fwrite(&bitsPerSample, 2, 1, fp);
+    // data sub-chunk
+    std::fwrite("data", 1, 4, fp);
+    uint32_t dataSizePlaceholder = 0;
+    std::fwrite(&dataSizePlaceholder, 4, 1, fp);   // offset 40
+
+    // 流式写入 PCM
+    std::vector<int16_t> buf(bufferFrames_ * 2);
+    uint32_t bytesWritten = 0;
     for (int i = 0; i < numChunks; ++i) {
         callback_(buf);
-        for (int16_t s : buf) allSamples.push_back(s);
+        const uint32_t chunkBytes = static_cast<uint32_t>(buf.size()) * 2u;
+        if (std::fwrite(buf.data(), 2, buf.size(), fp) != buf.size()) {
+            std::fclose(fp);
+            return false;
+        }
+        bytesWritten += chunkBytes;
     }
 
-    const int dataSize = static_cast<int>(allSamples.size()) * 2;
-    const int fileSize = 36 + dataSize;
+    // 回填 size 字段（L2 修复：uint32_t）
+    const uint32_t dataSize = bytesWritten;
+    const uint32_t fileSize = 36u + dataSize;
 
-    f.write("RIFF", 4);
-    f.write(reinterpret_cast<const char*>(&fileSize), 4);
-    f.write("WAVE", 4);
-    f.write("fmt ", 4);
-    const int fmtLen = 16;
-    f.write(reinterpret_cast<const char*>(&fmtLen), 4);
-    const int16_t audioFormat = 1;
-    f.write(reinterpret_cast<const char*>(&audioFormat), 2);
-    const int16_t numChannels = 2;
-    f.write(reinterpret_cast<const char*>(&numChannels), 2);
-    f.write(reinterpret_cast<const char*>(&sampleRate_), 4);
-    const int byteRate = sampleRate_ * 4;
-    f.write(reinterpret_cast<const char*>(&byteRate), 4);
-    const int16_t blockAlign = 4;
-    f.write(reinterpret_cast<const char*>(&blockAlign), 2);
-    const int16_t bitsPerSample = 16;
-    f.write(reinterpret_cast<const char*>(&bitsPerSample), 2);
-    f.write("data", 4);
-    f.write(reinterpret_cast<const char*>(&dataSize), 4);
-    f.write(reinterpret_cast<const char*>(allSamples.data()), dataSize);
+    std::fseek(fp, 4, SEEK_SET);
+    std::fwrite(&fileSize, 4, 1, fp);
+    std::fseek(fp, 40, SEEK_SET);
+    std::fwrite(&dataSize, 4, 1, fp);
+
+    std::fclose(fp);
+    return true;
 }
 
 }  // namespace binaural

@@ -5,6 +5,7 @@
 #include "binaural/period.hpp"
 #include "binaural/synthesizer.hpp"
 #include "binaural/waveformBuffer.hpp"
+#include <atomic>
 
 namespace binaural {
 struct Program;
@@ -29,7 +30,7 @@ struct AppContext {
   bool showLoadModal = false;
   bool showHelpCenter = false;
   bool loadedFromGnaural = false;
-  float manualElapsedSec = 0.f;
+  std::atomic<float> manualElapsedSec{0.f};  // 音频线程写，GUI 线程读
   char loadPathBuf[512] = {};
   bool timedPlaybackEnabled = false;
   float timedPlaybackDurationSec = 600.f;

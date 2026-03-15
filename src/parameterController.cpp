@@ -17,7 +17,7 @@ ParameterController::ParameterController(Synthesizer &synth,
 void ParameterController::update(float periodElapsedSec) {
   if (clearRequested_.exchange(false, std::memory_order_acq_rel)) {
     lastPrediction_.reset();
-    currentTargetHz_ = 0.f;
+    currentTargetHz_.store(0.f, std::memory_order_relaxed);
     aiDriven_.store(false, std::memory_order_release);
     synth_->skewVoices(periodElapsedSec);
     return;
@@ -32,30 +32,34 @@ void ParameterController::update(float periodElapsedSec) {
     aiDriven_.store(true, std::memory_order_release);
     float target = std::clamp(lastPrediction_->targetBeatFreq, BEAT_FREQ_MIN,
                              BEAT_FREQ_MAX);
-    if (currentTargetHz_ <= 0.f && synth_->currentPeriod()) {
-      currentTargetHz_ = synth_->currentPeriod()->voices[0].freqStart;
+    if (currentTargetHz_.load(std::memory_order_relaxed) <= 0.f && synth_->currentPeriod() &&
+        !synth_->currentPeriod()->voices.empty()) {
+      currentTargetHz_.store(synth_->currentPeriod()->voices[0].freqStart,
+                             std::memory_order_relaxed);
     }
     const auto &cfg = synth_->config();
     float dt = static_cast<float>(cfg.bufferFrames) / cfg.sampleRate;
-    float diff = target - currentTargetHz_;
+    float cur = currentTargetHz_.load(std::memory_order_relaxed);
+    float diff = target - cur;
     float maxStep = rampRate_ * dt;
+    float next;
     if (std::abs(diff) <= maxStep) {
-      currentTargetHz_ = target;
+      next = target;
     } else {
-      currentTargetHz_ += (diff > 0 ? maxStep : -maxStep);
+      next = cur + (diff > 0 ? maxStep : -maxStep);
     }
-    currentTargetHz_ =
-        std::clamp(currentTargetHz_, BEAT_FREQ_MIN, BEAT_FREQ_MAX);
+    next = std::clamp(next, BEAT_FREQ_MIN, BEAT_FREQ_MAX);
+    currentTargetHz_.store(next, std::memory_order_relaxed);
 
     if (const Period *period = synth_->currentPeriod()) {
       size_t n = period->voices.size();
-      std::vector<float> freqs(n, currentTargetHz_);
+      std::vector<float> freqs(n, currentTargetHz_.load(std::memory_order_relaxed));
       synth_->setFreqs(freqs);
     }
   } else {
     aiDriven_.store(false, std::memory_order_release);
     lastPrediction_.reset();
-    currentTargetHz_ = 0.f;
+    currentTargetHz_.store(0.f, std::memory_order_relaxed);
     synth_->skewVoices(periodElapsedSec);
   }
 }

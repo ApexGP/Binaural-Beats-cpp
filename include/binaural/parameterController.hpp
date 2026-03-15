@@ -24,7 +24,9 @@ public:
   bool isAiDriven() const { return aiDriven_.load(std::memory_order_acquire); }
 
   /// 当前有效节拍频率（AI 模式下为 ramping 目标，供 UI 显示）
-  float currentBeatFreq() const { return currentTargetHz_; }
+  float currentBeatFreq() const {
+      return currentTargetHz_.load(std::memory_order_relaxed);
+  }
 
   /// Ramping 速率：Hz/秒，默认 2.0
   void setRampRate(float hzPerSec) { rampRate_ = hzPerSec; }
@@ -38,7 +40,7 @@ public:
 private:
   Synthesizer *synth_;
   PredictionQueue *queue_;
-  float currentTargetHz_ = 0.f;
+  std::atomic<float> currentTargetHz_{0.f};
   std::atomic<bool> aiDriven_{false};
   std::atomic<bool> clearRequested_{false};
   float rampRate_ = 2.0f;

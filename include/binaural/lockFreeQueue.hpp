@@ -31,9 +31,10 @@ public:
         size_t t = tail_.load(std::memory_order_acquire);
         size_t h = head_.load(std::memory_order_relaxed);
         if (h >= t) return std::nullopt;
-        // 取最新：跳到最后一个
+        // 先读数据，再推进 head，避免生产者在读取窗口内覆写
+        T item = std::move(buffer_[(t - 1) % Capacity]);
         head_.store(t, std::memory_order_release);
-        return std::move(buffer_[(t - 1) % Capacity]);
+        return item;
     }
 
     /// 取一个（FIFO），空则返回 nullopt

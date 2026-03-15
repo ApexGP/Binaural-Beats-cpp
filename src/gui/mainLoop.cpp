@@ -1,6 +1,7 @@
 #include "gui/mainLoop.hpp"
 #include "gui/guiPanels.hpp"
 #include "gui/guiUtils.hpp"
+#include "gui/playbackController.hpp"
 #include "binaural/parameterController.hpp"
 #include "binaural/audioDriver.hpp"
 #include "imgui.h"
@@ -74,12 +75,10 @@ void doOneRenderFrame(RenderFrameData &data) {
 
   renderHelpCenter(ctx);
 
-  if (data.paramController && data.driver &&
+  if (data.paramController &&
       ctx.playing && !ctx.loadedFromGnaural && ctx.timedPlaybackEnabled &&
-      ctx.manualElapsedSec >= ctx.timedPlaybackDurationSec) {
-    data.paramController->clearAiState();
-    data.driver->stop();
-    ctx.playing = false;
+      ctx.manualElapsedSec.load(std::memory_order_relaxed) >= ctx.timedPlaybackDurationSec) {
+    PlaybackController::stop(ctx);
   }
 
   ImGui::Render();

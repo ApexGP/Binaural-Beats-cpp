@@ -42,7 +42,6 @@ int main() {
   SynthesizerConfig config;
   config.sampleRate = 44100;
   config.bufferFrames = 2048;
-  config.iscale = 1440;
 
   Synthesizer synth(config);
   synth.setProgram(program);

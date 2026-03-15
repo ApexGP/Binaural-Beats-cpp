@@ -192,27 +192,21 @@ int main(int argc, char *argv[]) {
   SynthesizerConfig config;
   config.sampleRate = 44100;
   config.bufferFrames = 2048;
-  config.iscale = 1440;
 
   Synthesizer synth(config);
   synth.setProgram(program);
 
   auto driver = createPortAudioDriver();
-  bool ok = driver->start(config.sampleRate, config.bufferFrames,
-                          [&synth, &config](std::vector<int16_t> &buf) {
-                            synth.skewVoices(synth.periodElapsedSec());
-                            synth.fillSamples(buf);
-                            synth.advanceTime(
-                                static_cast<float>(config.bufferFrames) /
-                                config.sampleRate);
-                          });
 
-  if (!ok) {
-    std::cerr << "Failed to start audio. Check PortAudio/device.\n";
-    return 1;
-  }
-
+  // WavFileDriver 分支：没有 PortAudio 时直接写文件
   if (auto *wav = dynamic_cast<WavFileDriver *>(driver.get())) {
+    auto wavCb = [&synth, &config](std::vector<int16_t> &buf) {
+      synth.skewVoices(synth.periodElapsedSec());
+      synth.fillSamples(buf);
+      synth.advanceTime(static_cast<float>(config.bufferFrames) /
+                        config.sampleRate);
+    };
+    wav->start(config.sampleRate, config.bufferFrames, wavCb);
     int totalSec = 0;
     for (const auto &p : program.seq)
       totalSec += p.lengthSec;
@@ -220,7 +214,10 @@ int main(int argc, char *argv[]) {
       totalSec = durationSec;
     std::cout << "PortAudio not found. Writing output.wav (" << totalSec
               << " sec)...\n";
-    wav->writeToFile("output.wav", static_cast<float>(totalSec));
+    if (!wav->writeToFile("output.wav", static_cast<float>(totalSec))) {
+      std::cerr << "Error: failed to write output.wav\n";
+      return 1;
+    }
     std::cout << "Done. Play output.wav to verify.\n";
     return 0;
   }
@@ -235,6 +232,12 @@ int main(int argc, char *argv[]) {
                                config.sampleRate);
                          });
   };
+
+  bool ok = startPlayback();
+  if (!ok) {
+    std::cerr << "Failed to start audio. Check PortAudio/device.\n";
+    return 1;
+  }
 
   if (loadedFromGnaural)
     std::cout << "Playing in " << program.name

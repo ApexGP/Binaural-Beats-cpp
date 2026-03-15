@@ -1,7 +1,6 @@
 #include "binaural/audioDriver.hpp"
 #include <portaudio.h>
 #include <atomic>
-#include <mutex>
 #include <stdexcept>
 
 namespace binaural {
@@ -10,8 +9,7 @@ namespace {
 
 struct StreamUserData {
     AudioCallback callback;
-    std::vector<int16_t> buffer;
-    std::mutex mutex;
+    std::vector<int16_t> buffer;   // 预分配，回调中不 resize
     std::atomic<bool> running{false};
 };
 
@@ -21,11 +19,12 @@ int portAudioCallback(const void* /*input*/, void* output, unsigned long frameCo
     auto* ud = static_cast<StreamUserData*>(userData);
     if (!ud->running) return paComplete;
 
-    ud->buffer.resize(frameCount * 2);
+    // buffer 已预分配，frameCount 应与 bufferFrames 相同
     ud->callback(ud->buffer);
 
     auto* out = static_cast<int16_t*>(output);
-    for (size_t i = 0; i < ud->buffer.size(); ++i) {
+    const size_t n = ud->buffer.size();
+    for (size_t i = 0; i < n; ++i) {
         out[i] = ud->buffer[i];
     }
     return paContinue;
