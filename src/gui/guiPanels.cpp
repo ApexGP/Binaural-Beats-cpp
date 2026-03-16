@@ -381,12 +381,13 @@ void renderControls(AppContext &ctx) {
 void renderHelpCenter(AppContext &ctx) {
   if (!ctx.showHelpCenter)
     return;
-  ImGui::SetNextWindowSize(ImVec2(480, 420), ImGuiCond_FirstUseEver);
+  const float s = ctx.uiScale;
+  ImGui::SetNextWindowSize(ImVec2(480 * s, 420 * s), ImGuiCond_FirstUseEver);
   ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 12.f);
   bool visible = ImGui::Begin("Help Center", &ctx.showHelpCenter,
                    ImGuiWindowFlags_NoCollapse);
   if (visible) {
-    if (ImGui::BeginChild("HelpContent", ImVec2(0, -30),
+    if (ImGui::BeginChild("HelpContent", ImVec2(0, -30 * s),
                           ImGuiChildFlags_Border)) {
       ImGui::TextColored(ImVec4(0.4f, 0.7f, 1.f, 1.f), "Parameters");
       ImGui::Separator();
@@ -429,7 +430,7 @@ void renderHelpCenter(AppContext &ctx) {
                          "the menu to get started.");
       ImGui::EndChild();
     }
-    if (ImGui::Button("Close", ImVec2(80, 0)))
+    if (ImGui::Button("Close", ImVec2(80 * s, 0)))
       ctx.showHelpCenter = false;
   }
   ImGui::End();
@@ -437,9 +438,10 @@ void renderHelpCenter(AppContext &ctx) {
 }
 
 void renderLoadModal(AppContext &ctx) {
+  const float s = ctx.uiScale;
   ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(),
                           ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
-  ImGui::SetNextWindowSize(ImVec2(480, 0), ImGuiCond_Appearing);
+  ImGui::SetNextWindowSize(ImVec2(480 * s, 0), ImGuiCond_Appearing);
   ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 12.f);
   ImGui::PushStyleVar(ImGuiStyleVar_PopupRounding, 12.f);
   ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 12.f);
@@ -447,7 +449,7 @@ void renderLoadModal(AppContext &ctx) {
                              ImGuiWindowFlags_AlwaysAutoResize)) {
     ctx.modalOpen = true;
     ImGui::Text("File path (.txt or .gnaural):");
-    ImGui::SetNextItemWidth(400);
+    ImGui::SetNextItemWidth(400 * s);
     ImGui::InputText("##path", ctx.loadPathBuf, sizeof(ctx.loadPathBuf));
 #ifdef _WIN32
     if (ImGui::Button("Browse...")) {
@@ -489,9 +491,10 @@ void renderLoadModal(AppContext &ctx) {
 }
 
 void renderTimedPlaybackModal(AppContext &ctx) {
+  const float s = ctx.uiScale;
   ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(),
                           ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
-  ImGui::SetNextWindowSize(ImVec2(320, 0), ImGuiCond_Appearing);
+  ImGui::SetNextWindowSize(ImVec2(320 * s, 0), ImGuiCond_Appearing);
   ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 12.f);
   ImGui::PushStyleVar(ImGuiStyleVar_PopupRounding, 12.f);
   ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 12.f);
@@ -499,19 +502,19 @@ void renderTimedPlaybackModal(AppContext &ctx) {
                              ImGuiWindowFlags_AlwaysAutoResize)) {
     ctx.modalOpen = true;
     ImGui::Text("Set playback duration (seconds):");
-    ImGui::SetNextItemWidth(120);
+    ImGui::SetNextItemWidth(120 * s);
     ImGui::InputFloat("##duration", &ctx.timedPlaybackDurationSec, 60.f, 300.f,
                       "%.0f", ImGuiInputTextFlags_CharsDecimal);
     if (ctx.timedPlaybackDurationSec < 1.f)
       ctx.timedPlaybackDurationSec = 1.f;
     ImGui::Spacing();
-    if (ImGui::Button("OK", ImVec2(80, 0))) {
+    if (ImGui::Button("OK", ImVec2(80 * s, 0))) {
       ctx.timedPlaybackEnabled = true;
       ctx.manualElapsedSec.store(0.f, std::memory_order_relaxed);
       ImGui::CloseCurrentPopup();
     }
     ImGui::SameLine();
-    if (ImGui::Button("Cancel", ImVec2(80, 0))) {
+    if (ImGui::Button("Cancel", ImVec2(80 * s, 0))) {
       ImGui::CloseCurrentPopup();
     }
     ImGui::EndPopup();

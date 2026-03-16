@@ -56,7 +56,7 @@ if(portaudio_FOUND)
             ${CMAKE_CURRENT_SOURCE_DIR}/include
             ${CMAKE_CURRENT_SOURCE_DIR}/include/gui
         )
-        target_link_libraries(BinauralBeatsGui PRIVATE BinauralAudio BinauralWaveform imgui::imgui opengl32)
+        target_link_libraries(BinauralBeatsGui PRIVATE BinauralAudio BinauralWaveform imgui::imgui opengl32 comctl32)
     else()
         message(STATUS "imgui not found, GUI disabled. Install: vcpkg install imgui[glfw-binding,opengl3-binding]:${VCPKG_TARGET_TRIPLET}")
     endif()

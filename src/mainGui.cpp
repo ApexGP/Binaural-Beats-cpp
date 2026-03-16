@@ -1,5 +1,6 @@
 #include <GLFW/glfw3.h>
 
+#include <algorithm>
 #include <memory>
 
 #include "binaural/audioDriver.hpp"
@@ -16,9 +17,36 @@
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
 
-
 #ifdef _WIN32
 #include <windows.h>
+// glfw3native.h must come after glfw3.h
+#define GLFW_EXPOSE_NATIVE_WIN32
+#include <GLFW/glfw3native.h>
+#include <commctrl.h>
+#endif
+
+#ifdef _WIN32
+namespace {
+// Pointer set before main loop; lives as long as main() runs.
+gui::RenderFrameData *g_resizeFrameData = nullptr;
+
+LRESULT CALLBACK dragRenderSubclassProc(HWND hwnd, UINT msg, WPARAM wParam,
+                                        LPARAM lParam, UINT_PTR uIdSubclass,
+                                        DWORD_PTR /*dwRefData*/) {
+  if (msg == WM_ENTERSIZEMOVE) {
+    // Fire a ~60 Hz timer to keep rendering while modal resize loop runs.
+    SetTimer(hwnd, 1, 16, nullptr);
+  } else if (msg == WM_EXITSIZEMOVE || msg == WM_DESTROY) {
+    KillTimer(hwnd, 1);
+    if (msg == WM_DESTROY)
+      RemoveWindowSubclass(hwnd, dragRenderSubclassProc, uIdSubclass);
+  } else if (msg == WM_TIMER && wParam == 1 && g_resizeFrameData) {
+    // Render one frame; ImGui_ImplGlfw_NewFrame reads current window size.
+    gui::doOneRenderFrame(*g_resizeFrameData);
+  }
+  return DefSubclassProc(hwnd, msg, wParam, lParam);
+}
+} // namespace
 #endif
 
 using namespace binaural;
@@ -99,16 +127,28 @@ int main() {
   glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
   glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
   glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-  // TODO: Re-enable when resize scaling is fixed. Win32 modal resize blocks
-  // main loop, causing stale DisplaySize.
-  glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+  glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
 
-  GLFWwindow *window = glfwCreateWindow(gui::WIDTH, gui::HEIGHT,
+  // Adapt initial window size to the monitor's work area (handles small screens).
+  int winW = gui::WIDTH, winH = gui::HEIGHT;
+  if (GLFWmonitor *primary = glfwGetPrimaryMonitor()) {
+    int mx, my, mw, mh;
+    glfwGetMonitorWorkarea(primary, &mx, &my, &mw, &mh);
+    if (mw > 0 && mh > 0) {
+      winW = (std::min)(winW, mw - 20);
+      winH = (std::min)(winH, mh - 60);
+      winW = (std::max)(winW, 480);
+      winH = (std::max)(winH, 360);
+    }
+  }
+
+  GLFWwindow *window = glfwCreateWindow(winW, winH,
                                         "Binaural Beats", nullptr, nullptr);
   if (!window) {
     glfwTerminate();
     return 1;
   }
+  glfwSetWindowSizeLimits(window, 560, 420, GLFW_DONT_CARE, GLFW_DONT_CARE);
   glfwMakeContextCurrent(window);
   glfwSwapInterval(1);
 
@@ -133,6 +173,15 @@ int main() {
   ImGui_ImplOpenGL3_Init("#version 330");
 
   gui::RenderFrameData frameData{&ctx, window, &paramController, driver.get()};
+
+#ifdef _WIN32
+  // Install subclass to keep rendering while Win32 modal resize loop runs.
+  {
+    HWND hwnd = glfwGetWin32Window(window);
+    SetWindowSubclass(hwnd, dragRenderSubclassProc, 1, 0);
+    g_resizeFrameData = &frameData;
+  }
+#endif
 
   while (!glfwWindowShouldClose(window)) {
     glfwPollEvents();
