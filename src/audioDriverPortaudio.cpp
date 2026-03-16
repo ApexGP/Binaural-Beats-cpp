@@ -1,7 +1,9 @@
-#include "binaural/audioDriver.hpp"
 #include <portaudio.h>
+
 #include <atomic>
 #include <stdexcept>
+
+#include "binaural/audioDriver.hpp"
 
 namespace binaural {
 
@@ -9,13 +11,14 @@ namespace {
 
 struct StreamUserData {
     AudioCallback callback;
-    std::vector<int16_t> buffer;   // 预分配，回调中不 resize
+    std::vector<int16_t> buffer;  // 预分配，回调中不 resize
     std::atomic<bool> running{false};
 };
 
 int portAudioCallback(const void* /*input*/, void* output, unsigned long frameCount,
-                      const PaStreamCallbackTimeInfo* /*timeInfo*/,
-                      PaStreamCallbackFlags /*flags*/, void* userData) {
+                      const PaStreamCallbackTimeInfo* /*timeInfo*/, PaStreamCallbackFlags /*flags*/,
+                      void* userData)
+{
     auto* ud = static_cast<StreamUserData*>(userData);
     if (!ud->running) return paComplete;
 
@@ -32,21 +35,25 @@ int portAudioCallback(const void* /*input*/, void* output, unsigned long frameCo
 
 }  // namespace
 
-class PortAudioDriver : public IAudioDriver {
+class PortAudioDriver : public IAudioDriver
+{
 public:
-    PortAudioDriver() {
+    PortAudioDriver()
+    {
         PaError err = Pa_Initialize();
         if (err != paNoError) {
             throw std::runtime_error(std::string("PortAudio init: ") + Pa_GetErrorText(err));
         }
     }
 
-    ~PortAudioDriver() override {
+    ~PortAudioDriver() override
+    {
         stop();
         Pa_Terminate();
     }
 
-    bool start(int sampleRate, int bufferFrames, AudioCallback cb) override {
+    bool start(int sampleRate, int bufferFrames, AudioCallback cb) override
+    {
         if (running_) return false;
 
         userData_.callback = std::move(cb);
@@ -64,8 +71,8 @@ public:
         outParam.suggestedLatency = Pa_GetDeviceInfo(outParam.device)->defaultLowOutputLatency;
         outParam.hostApiSpecificStreamInfo = nullptr;
 
-        PaError err = Pa_OpenStream(&stream_, nullptr, &outParam, sampleRate,
-                                   bufferFrames, paClipOff, portAudioCallback, &userData_);
+        PaError err = Pa_OpenStream(&stream_, nullptr, &outParam, sampleRate, bufferFrames,
+                                    paClipOff, portAudioCallback, &userData_);
         if (err != paNoError) {
             userData_.running = false;
             return false;
@@ -83,7 +90,8 @@ public:
         return true;
     }
 
-    void stop() override {
+    void stop() override
+    {
         if (!running_) return;
         userData_.running = false;
         if (stream_) {
@@ -94,7 +102,10 @@ public:
         running_ = false;
     }
 
-    bool isRunning() const override { return running_; }
+    bool isRunning() const override
+    {
+        return running_;
+    }
 
 private:
     PaStream* stream_ = nullptr;
@@ -102,7 +113,8 @@ private:
     std::atomic<bool> running_{false};
 };
 
-std::unique_ptr<IAudioDriver> createPortAudioDriver() {
+std::unique_ptr<IAudioDriver> createPortAudioDriver()
+{
     return std::make_unique<PortAudioDriver>();
 }
 

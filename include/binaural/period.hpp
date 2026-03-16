@@ -1,8 +1,9 @@
 #pragma once
 
-#include "voice.hpp"
 #include <string>
 #include <vector>
+
+#include "voice.hpp"
 
 namespace binaural {
 

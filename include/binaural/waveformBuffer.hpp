@@ -7,7 +7,8 @@ namespace binaural {
 
 /// 无锁 SPSC 环形缓冲：音频线程写，GUI 线程读（波形显示）
 /// 写者只写 writeIdx_，读者只读 writeIdx_（acquire）
-class WaveformBuffer {
+class WaveformBuffer
+{
 public:
     explicit WaveformBuffer(size_t capacity = 4096);
 

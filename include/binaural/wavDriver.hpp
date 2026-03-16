@@ -1,13 +1,15 @@
 #pragma once
 
-#include "audioDriver.hpp"
 #include <atomic>
 #include <string>
+
+#include "audioDriver.hpp"
 
 namespace binaural {
 
 /// 无 PortAudio 时：生成 WAV 文件用于验证算法
-class WavFileDriver : public IAudioDriver {
+class WavFileDriver : public IAudioDriver
+{
 public:
     bool start(int sampleRate, int bufferFrames, AudioCallback cb) override;
     void stop() override;

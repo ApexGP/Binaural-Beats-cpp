@@ -1,13 +1,15 @@
 #pragma once
 
-#include "gui/guiPanels.hpp"
 #include <string>
+
+#include "gui/guiPanels.hpp"
 
 namespace gui {
 
 /// 音频播放控制器：封装 driver start/stop、AI 模式切换、program 加载等控制逻辑
 /// guiPanels 只负责渲染，所有控制操作委托给此类
-class PlaybackController {
+class PlaybackController
+{
 public:
     /// 启动播放（已在播放中则无操作）
     static void start(AppContext &ctx);
@@ -26,4 +28,4 @@ public:
     static bool loadGnaural(AppContext &ctx);
 };
 
-} // namespace gui
+}  // namespace gui

@@ -3,11 +3,13 @@
 namespace binaural {
 
 StubPredictor::StubPredictor(bool simulate, float fixedTargetHz)
-    : simulate_(simulate), fixedTargetHz_(fixedTargetHz) {}
+    : simulate_(simulate), fixedTargetHz_(fixedTargetHz)
+{
+}
 
 std::optional<EEGStatePrediction> StubPredictor::predict(
-    const std::vector<std::vector<float>>& /*eegChannels*/,
-    float /*sampleRateHz*/) {
+    const std::vector<std::vector<float>>& /*eegChannels*/, float /*sampleRateHz*/)
+{
     if (!simulate_) {
         return std::nullopt;
     }

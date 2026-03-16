@@ -3,7 +3,8 @@
 namespace binaural {
 
 /// Trammell 粉红噪声 (1/f)，用于背景掩蔽
-class PinkNoise {
+class PinkNoise
+{
 public:
     PinkNoise();
     void clear();

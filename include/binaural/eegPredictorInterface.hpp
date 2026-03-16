@@ -17,15 +17,18 @@ struct EEGStatePrediction {
 };
 
 /// EEG 状态预测器抽象接口（可对接 CNN-LSTM 等模型）
-class IEEGStatePredictor {
+class IEEGStatePredictor
+{
 public:
     virtual ~IEEGStatePredictor() = default;
 
     virtual std::optional<EEGStatePrediction> predict(
-        const std::vector<std::vector<float>>& eegChannels,
-        float sampleRateHz) = 0;
+        const std::vector<std::vector<float>>& eegChannels, float sampleRateHz) = 0;
 
-    virtual bool isRealtimeCapable() const { return false; }
+    virtual bool isRealtimeCapable() const
+    {
+        return false;
+    }
 };
 
 }  // namespace binaural

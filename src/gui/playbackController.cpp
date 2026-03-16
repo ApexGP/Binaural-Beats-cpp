@@ -1,17 +1,18 @@
 #include "gui/playbackController.hpp"
+
+#include <vector>
+
 #include "binaural/gnauralParser.hpp"
 #include "binaural/period.hpp"
-#include <vector>
 
 namespace gui {
 
-void PlaybackController::start(AppContext &ctx) {
+void PlaybackController::start(AppContext &ctx)
+{
     if (ctx.playing) return;
     bool ok = ctx.driver->start(
-        ctx.config.sampleRate, ctx.config.bufferFrames,
-        [&ctx](std::vector<int16_t> &buf) {
-            float delta = static_cast<float>(ctx.config.bufferFrames) /
-                          ctx.config.sampleRate;
+        ctx.config.sampleRate, ctx.config.bufferFrames, [&ctx](std::vector<int16_t> &buf) {
+            float delta = static_cast<float>(ctx.config.bufferFrames) / ctx.config.sampleRate;
             ctx.paramController.update(ctx.synth.periodElapsedSec());
             ctx.synth.fillSamples(buf);
             for (size_t i = 0; i < buf.size(); i += 8) {
@@ -28,17 +29,17 @@ void PlaybackController::start(AppContext &ctx) {
     if (ok) ctx.playing = true;
 }
 
-void PlaybackController::stop(AppContext &ctx) {
+void PlaybackController::stop(AppContext &ctx)
+{
     if (!ctx.playing) return;
     const bool wasAiDriven = ctx.paramController.isAiDriven();
     if (wasAiDriven) {
         ctx.beatFreq = ctx.paramController.currentBeatFreq();
         int idx = ctx.synth.currentPeriodIndex();
-        if (!ctx.program.seq.empty() &&
-            idx < static_cast<int>(ctx.program.seq.size()) &&
+        if (!ctx.program.seq.empty() && idx < static_cast<int>(ctx.program.seq.size()) &&
             !ctx.program.seq[idx].voices.empty()) {
             ctx.program.seq[idx].voices[0].freqStart = ctx.beatFreq;
-            ctx.program.seq[idx].voices[0].freqEnd   = ctx.beatFreq;
+            ctx.program.seq[idx].voices[0].freqEnd = ctx.beatFreq;
             ctx.synth.setProgram(ctx.program);
         }
         ctx.manualElapsedSec.store(0.f, std::memory_order_relaxed);
@@ -48,16 +49,16 @@ void PlaybackController::stop(AppContext &ctx) {
     ctx.playing = false;
 }
 
-void PlaybackController::returnToManual(AppContext &ctx) {
+void PlaybackController::returnToManual(AppContext &ctx)
+{
     const bool wasAiDriven = ctx.paramController.isAiDriven();
     if (wasAiDriven) {
         ctx.beatFreq = ctx.paramController.currentBeatFreq();
         int idx = ctx.synth.currentPeriodIndex();
-        if (!ctx.program.seq.empty() &&
-            idx < static_cast<int>(ctx.program.seq.size()) &&
+        if (!ctx.program.seq.empty() && idx < static_cast<int>(ctx.program.seq.size()) &&
             !ctx.program.seq[idx].voices.empty()) {
             ctx.program.seq[idx].voices[0].freqStart = ctx.beatFreq;
-            ctx.program.seq[idx].voices[0].freqEnd   = ctx.beatFreq;
+            ctx.program.seq[idx].voices[0].freqEnd = ctx.beatFreq;
             ctx.synth.setProgram(ctx.program);
         }
         ctx.paramController.clearAiState();
@@ -68,11 +69,11 @@ void PlaybackController::returnToManual(AppContext &ctx) {
         ctx.program.seq.push_back({
             .lengthSec = 3600,
             .voices = {{.freqStart = 4.f,
-                        .freqEnd   = 4.f,
-                        .volume    = 0.7f,
-                        .pitch     = 161.f,
+                        .freqEnd = 4.f,
+                        .volume = 0.7f,
+                        .pitch = 161.f,
                         .isochronic = false}},
-            .background    = binaural::Period::Background::None,
+            .background = binaural::Period::Background::None,
             .backgroundVol = 0.f,
         });
         ctx.synth.setProgram(ctx.program);
@@ -83,12 +84,14 @@ void PlaybackController::returnToManual(AppContext &ctx) {
     ctx.manualElapsedSec.store(0.f, std::memory_order_relaxed);
 }
 
-void PlaybackController::exitTimedPlayback(AppContext &ctx) {
+void PlaybackController::exitTimedPlayback(AppContext &ctx)
+{
     ctx.timedPlaybackEnabled = false;
     ctx.manualElapsedSec.store(0.f, std::memory_order_relaxed);
 }
 
-bool PlaybackController::loadGnaural(AppContext &ctx) {
+bool PlaybackController::loadGnaural(AppContext &ctx)
+{
     auto prog = binaural::parseGnaural(ctx.loadPathBuf);
     if (!prog) return false;
     ctx.program = std::move(*prog);
@@ -96,11 +99,10 @@ bool PlaybackController::loadGnaural(AppContext &ctx) {
     ctx.loadedFromGnaural = true;
     if (!ctx.program.seq.empty() && !ctx.program.seq[0].voices.empty()) {
         ctx.beatFreq = ctx.program.seq[0].voices[0].freqStart;
-        ctx.baseFreq = ctx.program.seq[0].voices[0].pitch > 0
-                           ? ctx.program.seq[0].voices[0].pitch
-                           : 161.f;
+        ctx.baseFreq =
+            ctx.program.seq[0].voices[0].pitch > 0 ? ctx.program.seq[0].voices[0].pitch : 161.f;
     }
     return true;
 }
 
-} // namespace gui
+}  // namespace gui

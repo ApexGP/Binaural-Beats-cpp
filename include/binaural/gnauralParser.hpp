@@ -1,8 +1,9 @@
 #pragma once
 
-#include "period.hpp"
 #include <optional>
 #include <string>
+
+#include "period.hpp"
 
 namespace binaural {
 
