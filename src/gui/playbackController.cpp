@@ -15,9 +15,9 @@ void PlaybackController::start(AppContext &ctx)
             float delta = static_cast<float>(ctx.config.bufferFrames) / ctx.config.sampleRate;
             ctx.paramController.update(ctx.synth.periodElapsedSec());
             ctx.synth.fillSamples(buf);
-            for (size_t i = 0; i < buf.size(); i += 8) {
-                float l = buf[i] / 32768.f;
-                float r = buf[i + 1] / 32768.f;
+            for (size_t i = 0; i < buf.size(); i += 4) {
+                float l = buf[i] * (1.f / 32768.f);
+                float r = buf[i + 1] * (1.f / 32768.f);
                 ctx.waveBuf.push(l, r);
             }
             ctx.synth.advanceTime(delta);
