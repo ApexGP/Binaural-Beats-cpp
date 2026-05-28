@@ -11,18 +11,18 @@
 ### 依赖（vcpkg + MinGW toolchain）
 
 ```powershell
-# 安装 PortAudio + ImGui
-vcpkg install portaudio:x64-mingw-static imgui[glfw-binding,opengl3-binding]:x64-mingw-static
+# 安装 PortAudio（可选，缺失退化为 WAV 输出）
+vcpkg install portaudio:x64-mingw-static
 
 # 编译（需配置VCPKG_ROOT）
 mkdir build
 cd build
 cmake .. -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release
-make -j4
+mingw32-make -j4
 ```
 
-- 缺少 `portaudio` 时，程序会生成 `output.wav`（10 秒）用于验证
-- 缺少 `imgui` 时，GUI 目标不构建
+- 缺少 `portaudio` 时，程序会生成 `output.wav` 用于验证
+- GUI 依赖 `vendor/EUI-NEO`（已 vendored，无需额外安装）
 - `vcpkg` 安装教程点击[这里](https://learn.microsoft.com/zh-cn/vcpkg/get_started/get-started?pivots=shell-bash)
 
 ## 运行
@@ -51,7 +51,7 @@ make -j4
 
 ### GUI
 
-（需 PortAudio + imgui）
+（GUI 使用 EUI-NEO 跨平台框架，vendored 在 `vendor/EUI-NEO`，无需额外依赖）
 
 ```powershell
 .\build\BinauralBeatsGui.exe

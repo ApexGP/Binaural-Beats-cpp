@@ -2,23 +2,17 @@ cmake_minimum_required(VERSION 3.14)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-if(DEFINED ENV{VCPKG_ROOT} AND NOT DEFINED CMAKE_TOOLCHAIN_FILE)
-    set(CMAKE_TOOLCHAIN_FILE "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
-        CACHE STRING "vcpkg toolchain file")
-endif()
-if(NOT DEFINED VCPKG_TARGET_TRIPLET)
-    set(VCPKG_TARGET_TRIPLET "x64-mingw-static" CACHE STRING "vcpkg triplet")
-endif()
+# ── 平台配置 + vcpkg 检测 ────────────────────────────────────────────────────
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+include(PlatformConfig)
+binaural_detect_vcpkg()
 
 project(BinauralBeats LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED TRUE)
 
-# Static-link MinGW runtime (libgcc, libstdc++) to avoid DLL dependency.
-# libwinpthread may still require DLL; copy it to output if dynamic-linked.
-if(MINGW OR (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND WIN32))
-    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static-libgcc -static-libstdc++ -Wl,-Bstatic -lwinpthread -Wl,-Bdynamic")
-endif()
+# ── 核心音频库（无外部依赖）─────────────────────────────────────────────────
 
 add_library(BinauralSrc
     src/gnauralParser.cpp
@@ -29,42 +23,61 @@ add_library(BinauralSrc
     src/parameterController.cpp
 )
 target_include_directories(BinauralSrc PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+binaural_platform_defines(BinauralSrc)
 
 add_library(BinauralWaveform src/waveformBuffer.cpp)
 target_include_directories(BinauralWaveform PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+binaural_platform_defines(BinauralWaveform)
 
-find_package(portaudio CONFIG QUIET)
-find_package(imgui CONFIG QUIET)
-if(portaudio_FOUND)
+# ── 音频驱动（跨平台 PortAudio 发现）─────────────────────────────────────────
+
+include(FindPortAudio)
+
+if(PORTAUDIO_FOUND)
     add_library(BinauralAudio src/audioDriverPortaudio.cpp src/wavDriver.cpp)
     target_include_directories(BinauralAudio PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
-    target_link_libraries(BinauralAudio PUBLIC BinauralSrc portaudio_static)
+    target_link_libraries(BinauralAudio PUBLIC BinauralSrc ${PORTAUDIO_LIBRARIES})
+    if(DEFINED PORTAUDIO_INCLUDE_DIR)
+        target_include_directories(BinauralAudio PRIVATE ${PORTAUDIO_INCLUDE_DIR})
+    endif()
+    binaural_platform_defines(BinauralAudio)
 
     add_executable(BinauralBeats src/main.cpp)
     target_link_libraries(BinauralBeats PRIVATE BinauralAudio)
-
-    if(imgui_FOUND)
-        add_executable(BinauralBeatsGui WIN32
-            src/mainGui.cpp
-            src/gui/guiUtils.cpp
-            src/gui/guiFonts.cpp
-            src/gui/guiPanels.cpp
-            src/gui/mainLoop.cpp
-            src/gui/playbackController.cpp
-        )
-        target_include_directories(BinauralBeatsGui PRIVATE
-            ${CMAKE_CURRENT_SOURCE_DIR}/include
-            ${CMAKE_CURRENT_SOURCE_DIR}/include/gui
-        )
-        target_link_libraries(BinauralBeatsGui PRIVATE BinauralAudio BinauralWaveform imgui::imgui opengl32 comctl32)
-    else()
-        message(STATUS "imgui not found, GUI disabled. Install: vcpkg install imgui[glfw-binding,opengl3-binding]:${VCPKG_TARGET_TRIPLET}")
-    endif()
+    binaural_platform_defines(BinauralBeats)
 else()
-    message(WARNING "PortAudio not found. Install via: vcpkg install portaudio:${VCPKG_TARGET_TRIPLET}")
     add_library(BinauralAudio src/audioDriverStub.cpp src/wavDriver.cpp)
     target_include_directories(BinauralAudio PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
     target_link_libraries(BinauralAudio PUBLIC BinauralSrc)
+    binaural_platform_defines(BinauralAudio)
+
     add_executable(BinauralBeats src/main.cpp)
     target_link_libraries(BinauralBeats PRIVATE BinauralAudio)
+    binaural_platform_defines(BinauralBeats)
 endif()
+
+# ── GUI 可执行文件（集成 EUI-NEO）───────────────────────────────────────────
+
+# 将 EUI-NEO 作为子目录添加，不构建其示例 app
+set(EUI_BUILD_APPS OFF CACHE BOOL "" FORCE)
+add_subdirectory(vendor/EUI-NEO EXCLUDE_FROM_ALL)
+
+add_executable(BinauralBeatsGui
+    vendor/EUI-NEO/main.cpp
+    src/gui/euiApp.cpp
+    src/gui/euiMainPage.cpp
+    src/gui/euiModals.cpp
+    src/gui/guiUtils.cpp
+    src/gui/playbackController.cpp
+)
+target_include_directories(BinauralBeatsGui PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/gui
+)
+target_link_libraries(BinauralBeatsGui PRIVATE
+    BinauralAudio
+    BinauralWaveform
+    eui_core
+)
+binaural_configure_gui(BinauralBeatsGui)
+binaural_platform_defines(BinauralBeatsGui)

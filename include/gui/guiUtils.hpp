@@ -1,7 +1,5 @@
 #pragma once
 
-#include "imgui.h"
-
 namespace gui {
 
 // Layout constants
@@ -20,11 +18,5 @@ constexpr float VOL_MAX = 1.2f;
 
 const char *getBeatDescription(float hz);
 const char *getBalanceLabel(float b);
-void applyDarkTheme();
-void applyScaledStyle(float scale);
-
-bool sliderWithButtons(const char *label, float *v, float minV, float maxV, const char *fmt,
-                       float step, const char *valueLabel, const char *inputFmt = nullptr,
-                       const char *unitSuffix = nullptr, float scale = 1.f);
 
 }  // namespace gui

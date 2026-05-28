@@ -8,10 +8,6 @@
 #include "binaural/synthesizer.hpp"
 #include "binaural/waveformBuffer.hpp"
 
-namespace binaural {
-struct Program;
-}
-
 namespace gui {
 
 struct AppContext {
@@ -31,23 +27,17 @@ struct AppContext {
     bool showLoadModal = false;
     bool showHelpCenter = false;
     bool loadedFromGnaural = false;
-    std::atomic<float> manualElapsedSec{0.f};  // 音频线程写，GUI 线程读
-    char loadPathBuf[512] = {};
+    std::atomic<float>& manualElapsedSec;  // 音频线程写，GUI 线程读
+    char (&loadPathBuf)[512];
     bool timedPlaybackEnabled = false;
     float timedPlaybackDurationSec = 600.f;
     bool showTimedPlaybackModal = false;
+    bool showMenu = false;
     bool modalOpen = false;
 
-    // DPI scaling (set each frame in mainLoop)
     float uiScale = 1.f;
 };
 
-void renderTitleBar(AppContext &ctx);
-void renderWaveform(AppContext &ctx);
-void renderBeatDescription(AppContext &ctx);
-void renderControls(AppContext &ctx);
-void renderHelpCenter(AppContext &ctx);
-void renderLoadModal(AppContext &ctx);
-void renderTimedPlaybackModal(AppContext &ctx);
+bool isBackgroundDropdownOpen();
 
 }  // namespace gui

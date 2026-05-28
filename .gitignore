@@ -1,3 +1,21 @@
+# Build files
 .cache/
 build/
+release/
+
+# Dataset
 preset/
+
+# IDE
+.vscode/
+.claude/
+CLAUDE.md
+guideline.md
+algorithm_spec.md
+analysis.md
+
+# Temp
+__pycache__/
+
+# TODO
+TODO.md
