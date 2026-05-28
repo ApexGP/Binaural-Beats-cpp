@@ -1,5 +1,4 @@
 // euiMainPage.cpp — 主页面 compose 函数
-// 从 guiPanels.cpp 的 ImGui 渲染函数迁移到 EUI-NEO 声明式 DSL
 
 #include "gui/guiPanels.hpp"
 #include "gui/guiUtils.hpp"

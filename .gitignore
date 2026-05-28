@@ -17,5 +17,8 @@ analysis.md
 # Temp
 __pycache__/
 
+# ImGui runtime
+imgui.ini
+
 # TODO
 TODO.md

@@ -54,7 +54,9 @@ inline void sliderWithButtons(
     const float gap = 6.f * scale;
     const float valW = editable ? 90.f * scale : 68.f * scale;
     const float labelW = 130.f * scale;
-    const float sliderW = std::max(40.f, rowWidth - labelW - btnSz * 2.f - valW - gap * 4.f);
+    // 滑块宽度统一使用 68*s 计算，与 Balance（非 editable）对齐；
+    // editable 输入框额外宽度溢出到右侧 padding 区（row 默认不 clip）
+    const float sliderW = std::max(40.f, rowWidth - labelW - btnSz * 2.f - 68.f * scale - gap * 4.f);
     const float normalized = std::clamp((value - minV) / (maxV - minV), 0.f, 1.f);
     const std::string valText = rightLabel
         ? rightLabel

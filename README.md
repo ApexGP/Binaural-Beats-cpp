@@ -22,7 +22,7 @@ mingw32-make -j4
 ```
 
 - 缺少 `portaudio` 时，程序会生成 `output.wav` 用于验证
-- GUI 依赖 `vendor/EUI-NEO`（已 vendored，无需额外安装）
+- GUI 依赖 [EUI-NEO](https://github.com/sudoevolve/EUI-NEO)
 - `vcpkg` 安装教程点击[这里](https://learn.microsoft.com/zh-cn/vcpkg/get_started/get-started?pivots=shell-bash)
 
 ## 运行
@@ -51,7 +51,7 @@ mingw32-make -j4
 
 ### GUI
 
-（GUI 使用 EUI-NEO 跨平台框架，vendored 在 `vendor/EUI-NEO`，无需额外依赖）
+（GUI 使用 EUI-NEO 跨平台框架，无需额外依赖）
 
 ```powershell
 .\build\BinauralBeatsGui.exe
@@ -80,3 +80,7 @@ GUI 功能
 - [x] 等时节拍、粉红噪声、Gnaural 解析
 - [x] StubPredictor、参数控制层、无锁队列
 - [ ] 集成 ONNX/LibTorch，对接 CNN-LSTM 闭环
+
+## 致谢
+
+本项目 GUI 基于 [EUI-NEO](https://github.com/sudoevolve/EUI-NEO) 构建。EUI-NEO 是一个跨平台 C++17 声明式 UI 框架，采用保留模式（retained mode）架构，内置 GPU 渲染、动画系统和响应式布局。本项目将 EUI-NEO vendored 在 `vendor/EUI-NEO` 目录下，并对其主循环做了少量适配（持续渲染支持、高 DPI 修复）。
